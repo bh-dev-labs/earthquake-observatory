@@ -105,24 +105,23 @@ function EventTableView({
           aria-label="Depth range in kilometres"
         >
           <span class="range-label">Depth (km)</span>
-          <label>
-            from{" "}
+          <div class="range-inputs">
             <input
               type="number"
-              placeholder="Any"
+              aria-label="Minimum depth in kilometres"
+              placeholder="Min"
               value={filters.depthMin}
               onInput={(e) => change("depthMin", e.currentTarget.value)}
             />
-          </label>
-          <label>
-            to{" "}
+            <span aria-hidden="true">–</span>
             <input
               type="number"
-              placeholder="Any"
+              aria-label="Maximum depth in kilometres"
+              placeholder="Max"
               value={filters.depthMax}
               onInput={(e) => change("depthMax", e.currentTarget.value)}
             />
-          </label>
+          </div>
         </div>
         <label>
           Region preset{" "}

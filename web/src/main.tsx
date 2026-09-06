@@ -618,19 +618,23 @@ function App() {
     );
   }
   function chartExport() {
-    const svg = document
-      .querySelector("#timeline-chart")!
-      .cloneNode(true) as SVGElement;
+    const source = document.querySelector<SVGSVGElement>("#timeline-chart")!;
+    const svg = source.cloneNode(true) as SVGElement;
+    // The chart is drawn at its measured width, so the export follows it and
+    // adds two lines of room for provenance rather than assuming a size.
+    const width = source.viewBox.baseVal.width || 900;
     svg.setAttribute("xmlns", "http://www.w3.org/2000/svg");
-    svg.setAttribute("viewBox", "0 0 520 300");
+    svg.setAttribute("width", String(width));
+    svg.setAttribute("height", "306");
+    svg.setAttribute("viewBox", `0 0 ${width} 306`);
     const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
-    text.setAttribute("x", "10");
-    text.setAttribute("y", "248");
-    text.setAttribute("font-size", "8");
+    text.setAttribute("x", "12");
+    text.setAttribute("y", "280");
+    text.setAttribute("font-size", "12");
     text.textContent = `Query: ${dataset?.query}`;
     svg.append(text);
     const label = text.cloneNode() as SVGTextElement;
-    label.setAttribute("y", "265");
+    label.setAttribute("y", "298");
     label.textContent = `Filters: M ${filters.min || "any"} to ${filters.max || "any"}; depth ${filters.depthMin || "any"} to ${filters.depthMax || "any"} km; ${filters.region?.name || "global"}; text ${filters.text || "none"}`;
     svg.append(label);
     download(

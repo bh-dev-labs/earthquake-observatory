@@ -8,6 +8,7 @@ import {
   type Event,
 } from "./model";
 import { useState } from "preact/hooks";
+import { useMeasure } from "./hooks";
 
 const HOUR = 3600000,
   DAY = 86400000;
@@ -36,6 +37,11 @@ function timeBins(events: Event[]) {
       .map(([start, count]) => ({ start, count })),
     size,
   };
+}
+
+// Prose form: "each hour", "each six-hour period", "each day".
+function binUnit(size: number) {
+  return size === DAY ? "day" : size === 6 * HOUR ? "six-hour period" : "hour";
 }
 
 function binName(size: number) {
@@ -75,6 +81,31 @@ function magnitudeBins(events: Event[]) {
   }));
 }
 
+// Fixed pixel padding: charts draw at their measured size, so a label is
+// thirteen real pixels whatever the window does.
+const PAD = { left: 52, right: 18, top: 46, bottom: 42 };
+const PLOT = { top: PAD.top, bottom: 260 - PAD.bottom };
+
+// Whole-number gridlines up to a rounded maximum at or above the peak, so
+// the tallest bar sits under a labelled line instead of running off the top.
+function countStep(peak: number) {
+  return Math.max(1, Math.ceil(Math.max(1, peak) / 4));
+}
+function axisMax(peak: number) {
+  const step = countStep(peak);
+  return step * Math.max(1, Math.ceil(Math.max(1, peak) / step));
+}
+function countTicks(peak: number) {
+  const step = countStep(peak),
+    max = axisMax(peak);
+  const out: number[] = [];
+  for (let v = 0; v <= max; v += step) out.push(v);
+  return out;
+}
+function barY(value: number, peak: number) {
+  return PLOT.bottom - (value / axisMax(peak)) * (PLOT.bottom - PLOT.top);
+}
+
 function ticks(lo: number, hi: number, count = 5) {
   if (!(hi > lo)) return [lo];
   const step = (hi - lo) / count;
@@ -111,8 +142,16 @@ function AnalysisView({
   const magLo = points.length ? Math.floor(Math.min(...magValues) * 2) / 2 : 0,
     magHi = points.length ? Math.ceil(Math.max(...magValues) * 2) / 2 : 6;
   const magSpan = Math.max(0.5, magHi - magLo);
-  const plotX = (m: number) => 48 + ((m - magLo) / magSpan) * 452;
-  const plotY = (d: number) => 34 + (d / maxDepth) * 150;
+  const [timelineRef, timelineWidth] = useMeasure<HTMLDivElement>();
+  const [magRef, magWidth] = useMeasure<HTMLDivElement>();
+  const [depthRef, depthWidth] = useMeasure<HTMLDivElement>();
+  const tw = Math.max(320, timelineWidth || 900);
+  const mw = Math.max(280, magWidth || 480);
+  const dw = Math.max(280, depthWidth || 480);
+  const magX = (m: number, width: number) =>
+    PAD.left + ((m - magLo) / magSpan) * (width - PAD.left - PAD.right);
+  const depthY = (d: number) =>
+    PLOT.top + (d / maxDepth) * (PLOT.bottom - PLOT.top);
   const ratio = comparison(a, b);
   const start: [number, number] = [170, -22],
     end: [number, number] = [-170, -22];
@@ -135,70 +174,95 @@ function AnalysisView({
         needing them.
       </p>
       <div class="charts">
-        <div>
+        <div class="chart-wide" ref={timelineRef}>
           <h3>Events over time</h3>
+          <p class="chart-note">
+            How many earthquakes were recorded in each {binUnit(size)} of the
+            loaded period. A taller bar means more earthquakes.
+          </p>
           <svg
             id="timeline-chart"
-            viewBox="0 0 520 240"
+            width={tw}
+            height={260}
+            viewBox={`0 0 ${tw} 260`}
             role="img"
             aria-label={`Counts per ${binName(size)}: ${bins.map((b) => `${binFull(b.start, size)}: ${b.count}`).join(", ")}`}
           >
             <title>Earthquake observations per {binName(size)}</title>
-            <rect width="520" height="240" fill={token("--surface")} />
-            <text x="30" y="18" font-size="12" fill={token("--ink")}>
-              USGS observations · {binName(size)} · n={events.length}
-            </text>
-            <line
-              x1="34"
-              x2="500"
-              y1="170"
-              y2="170"
-              stroke={token("--chart-grid")}
-            />
+            <rect width={tw} height="260" fill={token("--surface")} />
+            {countTicks(peak).map((v) => (
+              <g key={v}>
+                <line
+                  x1={PAD.left}
+                  x2={tw - PAD.right}
+                  y1={barY(v, peak)}
+                  y2={barY(v, peak)}
+                  stroke={token("--chart-grid")}
+                />
+                <text
+                  x={PAD.left - 10}
+                  y={barY(v, peak) + 5}
+                  font-size="13"
+                  text-anchor="end"
+                  fill={token("--ink-muted")}
+                >
+                  {v}
+                </text>
+              </g>
+            ))}
             {bins.map((bin, i) => {
-              const w = Math.max(1, 466 / Math.max(1, bins.length) - 2),
-                x = 35 + (i * 466) / Math.max(1, bins.length),
-                h = (bin.count / peak) * 125;
+              const slot =
+                  (tw - PAD.left - PAD.right) / Math.max(1, bins.length),
+                x = PAD.left + i * slot,
+                w = Math.max(1, slot - 3),
+                y = barY(bin.count, peak);
               return (
                 <g key={bin.start}>
                   <rect
                     x={x}
-                    y={170 - h}
+                    y={y}
                     width={w}
-                    height={h}
+                    height={PLOT.bottom - y}
                     fill={token("--chart-bar")}
                   >
                     <title>
                       {binFull(bin.start, size)}: {bin.count}
                     </title>
                   </rect>
-                  {i % stride === 0 && (
+                  {i %
+                    Math.ceil(
+                      bins.length / Math.max(2, Math.floor(tw / 110)),
+                    ) ===
+                    0 && (
                     <text
-                      x={x}
-                      y="188"
-                      font-size="9"
+                      x={x + w / 2}
+                      y={PLOT.bottom + 20}
+                      font-size="13"
+                      text-anchor="middle"
                       fill={token("--ink-muted")}
-                      transform={`rotate(30 ${x} 188)`}
                     >
                       {binLabel(bin.start, size)}
-                    </text>
-                  )}
-                  {bins.length <= 24 && bin.count > 0 && (
-                    <text
-                      x={x}
-                      y={164 - h}
-                      font-size="10"
-                      fill={token("--ink-muted")}
-                    >
-                      {bin.count}
                     </text>
                   )}
                 </g>
               );
             })}
-            <text x="12" y="228" font-size="9" fill={token("--ink-muted")}>
-              Bins are half-open [start, start + width); the first and last may
-              be partial.
+            <text
+              x={PAD.left}
+              y="20"
+              font-size="13"
+              fill={token("--ink-muted")}
+            >
+              Earthquakes per {binUnit(size)} · n={events.length}
+            </text>
+            <text
+              x={(tw + PAD.left) / 2}
+              y="252"
+              font-size="13"
+              text-anchor="middle"
+              fill={token("--ink-muted")}
+            >
+              Time (UTC) →
             </text>
           </svg>
           <details>
@@ -210,85 +274,119 @@ function AnalysisView({
             ))}
           </details>
         </div>
-        <div>
+        <div ref={magRef}>
           <h3>Magnitude distribution</h3>
+          <p class="chart-note">
+            How many earthquakes fell in each magnitude step. Most earthquakes
+            are small ones.
+          </p>
           <svg
-            viewBox="0 0 520 240"
+            width={mw}
+            height={260}
+            viewBox={`0 0 ${mw} 260`}
             role="img"
             aria-label={`Magnitude bins: ${mags.map((m) => `${m.label} to ${m.label + 1}: ${m.count}`).join(", ")}`}
           >
             <title>
               Magnitude histogram; left inclusive, right exclusive bins
             </title>
-            <line
-              x1="28"
-              x2="500"
-              y1="180"
-              y2="180"
-              stroke={token("--chart-grid")}
-            />
+            {countTicks(mpeak).map((v) => (
+              <g key={v}>
+                <line
+                  x1={PAD.left}
+                  x2={mw - PAD.right}
+                  y1={barY(v, mpeak)}
+                  y2={barY(v, mpeak)}
+                  stroke={token("--chart-grid")}
+                />
+                <text
+                  x={PAD.left - 10}
+                  y={barY(v, mpeak) + 5}
+                  font-size="13"
+                  text-anchor="end"
+                  fill={token("--ink-muted")}
+                >
+                  {v}
+                </text>
+              </g>
+            ))}
             {mags.map((m, i) => {
-              const w = Math.min(40, 460 / Math.max(1, mags.length) - 6),
-                x = 32 + (i * 460) / Math.max(1, mags.length),
-                h = (m.count / mpeak) * 140;
+              const slot =
+                  (mw - PAD.left - PAD.right) / Math.max(1, mags.length),
+                x = PAD.left + i * slot,
+                w = Math.min(56, slot - 8),
+                y = barY(m.count, mpeak);
               return (
                 <g key={m.label}>
                   <rect
-                    x={x}
-                    y={180 - h}
-                    width={w}
-                    height={h}
+                    x={x + (slot - w) / 2}
+                    y={y}
+                    width={Math.max(2, w)}
+                    height={PLOT.bottom - y}
                     fill={token("--chart-bar-soft")}
-                  />
+                  >
+                    <title>
+                      M {m.label} to {m.label + 1}: {m.count}
+                    </title>
+                  </rect>
                   <text
-                    x={x}
-                    y="199"
-                    font-size="11"
+                    x={x + slot / 2}
+                    y={PLOT.bottom + 20}
+                    font-size="13"
+                    text-anchor="middle"
                     fill={token("--ink-muted")}
                   >
                     {m.label}
                   </text>
-                  {m.count > 0 && (
-                    <text
-                      x={x}
-                      y={174 - h}
-                      font-size="10"
-                      fill={token("--ink-muted")}
-                    >
-                      {m.count}
-                    </text>
-                  )}
                 </g>
               );
             })}
-            <text x="30" y="226" font-size="12" fill={token("--ink")}>
-              Magnitude · bins [m, m+1) · mixed reported types
+            <text
+              x={PAD.left}
+              y="20"
+              font-size="13"
+              fill={token("--ink-muted")}
+            >
+              Number of earthquakes
+            </text>
+            <text
+              x={(mw + PAD.left) / 2}
+              y="252"
+              font-size="13"
+              text-anchor="middle"
+              fill={token("--ink-muted")}
+            >
+              Magnitude · bins [m, m+1) →
             </text>
           </svg>
         </div>
-        <div>
+        <div ref={depthRef}>
           <h3>Depth versus magnitude</h3>
+          <p class="chart-note">
+            Each dot is one earthquake: how strong it was, and how deep below
+            the surface it started. Deeper is lower.
+          </p>
           <svg
-            viewBox="0 0 520 240"
+            width={dw}
+            height={260}
+            viewBox={`0 0 ${dw} 260`}
             role="img"
             aria-label={`Depth versus magnitude for ${points.length} records, magnitude ${magLo} to ${magHi}, depth 0 to ${Math.ceil(maxDepth)} kilometres. Depth increases downward; every event is also in the table.`}
           >
-            <text x="10" y="15" font-size="12" fill={token("--ink")}>
-              Depth (km) ↓ versus magnitude · n={points.length}
-            </text>
             {ticks(0, maxDepth, 4).map((d) => (
               <g key={d}>
                 <line
-                  x1="48"
-                  x2="500"
-                  y1={plotY(d)}
-                  y2={plotY(d)}
+                  x1={PAD.left}
+                  x2={dw - PAD.right}
+                  y1={depthY(d)}
+                  y2={depthY(d)}
                   stroke={token("--chart-grid")}
                 />
                 <text
-                  x="4"
-                  y={plotY(d) + 4}
-                  font-size="9"
+                  x={PAD.left - 10}
+                  y={depthY(d) + 5}
+                  font-size="13"
+                  text-anchor="end"
                   fill={token("--ink-muted")}
                 >
                   {Math.round(d)}
@@ -296,24 +394,16 @@ function AnalysisView({
               </g>
             ))}
             {ticks(magLo, magHi, 5).map((m) => (
-              <g key={m}>
-                <line
-                  x1={plotX(m)}
-                  x2={plotX(m)}
-                  y1="34"
-                  y2="184"
-                  stroke={token("--chart-grid")}
-                />
-                <text
-                  x={plotX(m)}
-                  y="198"
-                  font-size="9"
-                  text-anchor="middle"
-                  fill={token("--ink-muted")}
-                >
-                  {m.toFixed(1)}
-                </text>
-              </g>
+              <text
+                key={m}
+                x={magX(m, dw)}
+                y={PLOT.bottom + 20}
+                font-size="13"
+                text-anchor="middle"
+                fill={token("--ink-muted")}
+              >
+                {m.toFixed(1)}
+              </text>
             ))}
             {/* Deliberately unkeyed: these marks carry no identity or DOM
                 state, and keyed reconciliation of 20,000 circles costs about
@@ -321,11 +411,12 @@ function AnalysisView({
             {points.map((e) => (
               <circle
                 onClick={() => select(e)}
-                cx={plotX(e.properties.mag!)}
-                cy={plotY(e.geometry.coordinates[2]!)}
-                r={selected === e.id ? 6 : 3}
+                cx={magX(e.properties.mag!, dw)}
+                cy={depthY(e.geometry.coordinates[2]!)}
+                r={selected === e.id ? 7 : 4}
                 fill={color(e.geometry.coordinates[2])}
                 stroke={selected === e.id ? token("--ink") : "none"}
+                stroke-width="2"
               >
                 <title>
                   {e.properties.place} · M {e.properties.mag} ·{" "}
@@ -333,12 +424,15 @@ function AnalysisView({
                 </title>
               </circle>
             ))}
+            <text x="4" y="20" font-size="13" fill={token("--ink-muted")}>
+              Depth (km) ↓ · n={points.length}
+            </text>
             <text
-              x="270"
-              y="220"
-              font-size="12"
+              x={(dw + PAD.left) / 2}
+              y="252"
+              font-size="13"
               text-anchor="middle"
-              fill={token("--ink")}
+              fill={token("--ink-muted")}
             >
               Magnitude →
             </text>

@@ -642,11 +642,20 @@ td {
 }
 .charts {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 22px;
+  grid-template-columns: 1fr 1fr;
+  gap: 26px 30px;
+}
+.charts > .chart-wide {
+  grid-column: 1 / -1;
 }
 .charts h3 {
-  font-size: 15px;
+  font-size: 17px;
+  margin-bottom: 4px;
+}
+.chart-note {
+  font-size: 13px;
+  color: var(--ink-muted);
+  margin: 6px 0 0;
 }
 .charts svg {
   width: 100%;
@@ -1010,6 +1019,24 @@ footer p {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+.table-filters .range-field {
+  flex-direction: column;
+  align-items: start;
+  gap: 4px;
+}
+.table-filters .range-label {
+  font-size: 14px;
+  font-weight: 400;
+}
+.range-inputs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ink-muted);
+}
+.range-inputs input {
+  width: 84px;
 }
 .range-label {
   font-weight: 600;

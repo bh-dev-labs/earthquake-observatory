@@ -5,3 +5,8 @@ release/
 playwright-report/
 test-results/
 .DS_Store
+
+# Compiled binaries from `go build ./cmd/observatory`
+/observatory
+/earthquake-observatory
+/earthquake-observatory.exe

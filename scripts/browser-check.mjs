@@ -26,9 +26,26 @@ await page.locator(".filter-note").waitFor();
 await page.locator(".event-link").first().click();
 await page.locator(".magnitude").waitFor();
 await page.waitForTimeout(450);
-await page
-  .locator(".observatory")
-  .screenshot({ path: "docs/screenshots/selection.png" });
+// A clipped page screenshot, not an element one: element captures composite
+// fixed-position nodes into the crop, which drew the off-screen skip link
+// across the heading in the documentation image.
+{
+  await page.locator(".observatory").scrollIntoViewIfNeeded();
+  await page.waitForTimeout(250);
+  const box = await page.locator(".observatory").boundingBox();
+  await page.screenshot({
+    path: "docs/screenshots/selection.png",
+    clip: {
+      x: box.x,
+      y: Math.max(0, box.y),
+      width: box.width,
+      height: Math.min(
+        box.height,
+        page.viewportSize().height - Math.max(0, box.y),
+      ),
+    },
+  });
+}
 await page.getByRole("button", { name: "2D map", exact: true }).click();
 await page.getByRole("button", { name: "3D globe", exact: true }).click();
 await page

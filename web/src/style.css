@@ -411,9 +411,16 @@ label {
   font-size: 13px;
 }
 .detail-top button {
-  border: 0;
-  font-size: 29px;
-  padding: 0 8px;
+  font-size: 13px;
+  padding: 5px 10px;
+  min-height: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.detail-top button span {
+  font-size: 17px;
+  line-height: 1;
 }
 .magnitude {
   font-size: 54px;

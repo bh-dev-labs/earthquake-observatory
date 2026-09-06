@@ -71,8 +71,13 @@ function SelectedEventView({
     <>
       <div class="detail-top">
         <span>Selected earthquake</span>
-        <button onClick={closeSelection} aria-label="Close event details">
-          ×
+        <button
+          class="clear-selection"
+          onClick={closeSelection}
+          aria-label="Close event details"
+          title="Close these details (Esc)"
+        >
+          Clear selection <span aria-hidden="true">×</span>
         </button>
       </div>
       <h2 class="magnitude" ref={detailHeading} tabIndex={-1}>

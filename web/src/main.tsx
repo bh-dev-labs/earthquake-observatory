@@ -469,6 +469,13 @@ function App() {
     }
   }
   function choose(e: Event) {
+    // Clicking the selected earthquake again clears it: on a chart or the
+    // globe there is nothing else to click, and the close control is at the
+    // top of a panel the reader may have scrolled away from.
+    if (selected?.id === e.id) {
+      closeSelection();
+      return;
+    }
     pause();
     selectionOrigin.current = document.activeElement as HTMLElement;
     setSelected(e);
@@ -624,6 +631,12 @@ function App() {
     // adds two lines of room for provenance rather than assuming a size.
     const width = source.viewBox.baseVal.width || 900;
     svg.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+    // font-family: inherit comes from the stylesheet, which the standalone
+    // file does not carry, so state the stack on the exported element.
+    svg.setAttribute(
+      "font-family",
+      "Inter, 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif",
+    );
     svg.setAttribute("width", String(width));
     svg.setAttribute("height", "306");
     svg.setAttribute("viewBox", `0 0 ${width} 306`);

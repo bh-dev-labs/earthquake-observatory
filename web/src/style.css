@@ -8,7 +8,7 @@
   color: var(--ink);
   background: var(--bg);
   font-synthesis: none;
-  font-size: 15px;
+  font-size: 16px;
   line-height: 1.55;
   color-scheme: light;
 
@@ -194,16 +194,16 @@ p {
   margin: 0 0 12px;
 }
 h1 {
-  font-size: 23px;
+  font-size: 29px;
   letter-spacing: -0.8px;
   line-height: 1.2;
 }
 h2 {
-  font-size: 18px;
+  font-size: 21px;
   letter-spacing: -0.25px;
 }
 h3 {
-  font-size: 16px;
+  font-size: 18px;
 }
 p {
   max-width: 85ch;
@@ -213,7 +213,7 @@ a {
   text-underline-offset: 3px;
 }
 main {
-  max-width: 1440px;
+  max-width: min(1840px, 96vw);
   margin: 24px auto;
   background: var(--surface);
   border: 1px solid var(--line);
@@ -234,21 +234,21 @@ header {
   gap: 13px;
 }
 .brand-mark {
-  font-size: 40px;
+  font-size: 46px;
   line-height: 1;
   color: var(--accent);
 }
 .brand p {
   margin: 5px 0 0;
   color: var(--ink-muted);
-  font-size: 13px;
+  font-size: 14px;
 }
 nav {
   display: flex;
   gap: 7px;
 }
 .status {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--accent);
 }
 .toolbar,
@@ -269,13 +269,13 @@ label {
 .muted,
 .map-credit {
   color: var(--ink-muted);
-  font-size: 12px;
+  font-size: 13px;
 }
 .freshness {
   padding: 8px 30px;
   border-bottom: 1px solid var(--line);
   color: var(--ink-muted);
-  font-size: 12px;
+  font-size: 13px;
 }
 .stale,
 .notice {
@@ -292,7 +292,7 @@ label {
 }
 .observatory {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 340px;
+  grid-template-columns: minmax(0, 1fr) clamp(340px, 23vw, 470px);
 }
 .earth-panel {
   background: var(--surface-raised);
@@ -311,7 +311,7 @@ label {
   margin: 0;
 }
 .earth-heading span {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--ink-muted);
 }
 .canvas-wrap {
@@ -336,7 +336,7 @@ label {
   background: var(--surface);
   padding: 10px;
   box-shadow: 0 2px 8px #20353c20;
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.4;
   pointer-events: none;
 }
@@ -366,7 +366,7 @@ label {
   margin: 10px 15px;
 }
 .globe-controls label {
-  font-size: 12px;
+  font-size: 13px;
 }
 .legend {
   display: flex;
@@ -374,7 +374,7 @@ label {
   gap: 17px;
   flex-wrap: wrap;
   margin: 17px 10px 8px;
-  font-size: 12px;
+  font-size: 13px;
   color: var(--ink-muted);
 }
 .legend span {
@@ -394,13 +394,13 @@ label {
 }
 .map-credit {
   text-align: center;
-  font-size: 10px;
+  font-size: 11px;
   margin: 0 auto;
   padding: 0 12px;
   line-height: 1.6;
 }
 .details {
-  padding: 25px 25px;
+  padding: 28px 30px;
   min-width: 0;
 }
 .detail-top {
@@ -408,29 +408,29 @@ label {
   align-items: center;
   justify-content: space-between;
   color: var(--ink-muted);
-  font-size: 12px;
+  font-size: 13px;
 }
 .detail-top button {
   border: 0;
-  font-size: 25px;
+  font-size: 29px;
   padding: 0 8px;
 }
 .magnitude {
-  font-size: 46px;
+  font-size: 54px;
   font-weight: 400;
   line-height: 1.2;
   margin: 7px 0;
 }
 .magnitude small {
-  font-size: 14px;
+  font-size: 15px;
   color: var(--ink-muted);
 }
 .details h3 {
-  font-size: 20px;
+  font-size: 23px;
   line-height: 1.35;
 }
 .details p {
-  font-size: 13px;
+  font-size: 14px;
   color: var(--ink-muted);
 }
 .selection-note {
@@ -443,12 +443,12 @@ label {
   margin: 25px 0;
 }
 .details dt {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--ink-muted);
 }
 .details dd {
   margin: 3px 0 0;
-  font-size: 14px;
+  font-size: 15px;
 }
 .wide {
   grid-column: 1/-1;
@@ -484,13 +484,13 @@ hr {
   color: var(--ink-muted);
 }
 .selection-illustration span {
-  font-size: 80px;
+  font-size: 92px;
 }
 .selection-illustration small {
   color: var(--plate);
 }
 .eyebrow {
-  font-size: 12px !important;
+  font-size: 13px !important;
 }
 .section-heading {
   display: flex;
@@ -503,7 +503,7 @@ hr {
   margin: 0;
 }
 .section-heading > span {
-  font-size: 12px;
+  font-size: 13px;
 }
 .replay,
 .activity,
@@ -522,7 +522,7 @@ hr {
   flex: 1;
 }
 .replay-line label {
-  font-size: 12px;
+  font-size: 13px;
 }
 .replay .muted {
   margin: 12px 0 0;
@@ -544,15 +544,15 @@ hr {
   min-width: 0;
 }
 .area strong {
-  font-size: 14px;
+  font-size: 15px;
 }
 .area span {
   color: var(--accent);
-  font-size: 13px;
+  font-size: 14px;
 }
 .area small {
   color: var(--ink-muted);
-  font-size: 11px;
+  font-size: 12px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -574,7 +574,7 @@ hr {
   flex-direction: column;
   align-items: start;
   gap: 4px;
-  font-size: 12px;
+  font-size: 13px;
 }
 .table-wrap {
   overflow: auto;
@@ -588,7 +588,7 @@ table {
 }
 th {
   font-weight: 500;
-  font-size: 12px;
+  font-size: 13px;
   color: var(--ink-muted);
   border-bottom: 1px solid var(--line);
   padding: 10px;
@@ -596,7 +596,7 @@ th {
 td {
   border-bottom: 1px solid var(--line-soft);
   padding: 8px 10px;
-  font-size: 13px;
+  font-size: 14px;
 }
 .event-link {
   border: 0;
@@ -611,7 +611,7 @@ td {
 .count {
   font-weight: 400;
   color: var(--ink-muted);
-  font-size: 14px;
+  font-size: 15px;
 }
 .pagination,
 .button-row {
@@ -621,7 +621,7 @@ td {
   flex-wrap: wrap;
 }
 .pagination {
-  font-size: 12px;
+  font-size: 13px;
 }
 .filter-note {
   padding: 8px;
@@ -637,7 +637,7 @@ td {
 }
 .import input {
   max-width: 170px;
-  font-size: 11px;
+  font-size: 12px;
   border: 0;
 }
 .charts {
@@ -646,7 +646,7 @@ td {
   gap: 22px;
 }
 .charts h3 {
-  font-size: 14px;
+  font-size: 15px;
 }
 .charts svg {
   width: 100%;
@@ -682,7 +682,7 @@ summary {
   max-height: 380px;
 }
 .depth-section p {
-  font-size: 12px;
+  font-size: 13px;
 }
 .depth-section circle,
 .charts circle {
@@ -709,7 +709,7 @@ summary {
 footer {
   padding: 23px 30px;
   border-top: 1px solid var(--line);
-  font-size: 12px;
+  font-size: 13px;
   background: var(--surface-sunken);
 }
 footer > div {
@@ -726,10 +726,10 @@ footer button {
   background: transparent;
   color: var(--accent);
   text-decoration: underline;
-  font-size: 12px;
+  font-size: 13px;
 }
 footer p {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--ink-muted);
   margin-bottom: 0;
 }
@@ -760,7 +760,7 @@ footer p {
   margin-top: 24px;
 }
 .modal p {
-  font-size: 14px;
+  font-size: 15px;
 }
 .skip {
   position: fixed;
@@ -781,8 +781,21 @@ footer p {
   clip: rect(0, 0, 0, 0);
 }
 @media (min-width: 1500px) {
+  :root {
+    font-size: 17px;
+  }
   main {
     margin: 35px auto;
+  }
+  header,
+  .toolbar,
+  .replay,
+  .activity,
+  .events,
+  .analysis,
+  footer {
+    padding-left: 34px;
+    padding-right: 34px;
   }
 }
 @media (max-width: 1100px) {
@@ -850,7 +863,7 @@ footer p {
     gap: 10px;
   }
   .toolbar label {
-    font-size: 12px;
+    font-size: 13px;
   }
   .toolbar input {
     width: 64px;
@@ -870,7 +883,7 @@ footer p {
   .earth-heading span {
     order: 0;
     width: auto;
-    font-size: 11px;
+    font-size: 12px;
   }
   .details {
     padding: 22px;
@@ -926,7 +939,7 @@ footer p {
   }
   .legend {
     gap: 10px;
-    font-size: 11px;
+    font-size: 12px;
   }
   .globe-controls {
     gap: 6px;
@@ -935,7 +948,7 @@ footer p {
     padding: 7px 10px;
   }
   .map-credit {
-    font-size: 10px;
+    font-size: 11px;
   }
   .chart-actions {
     padding: 0 18px 20px;
@@ -948,7 +961,7 @@ footer p {
     padding: 15px;
   }
   .history p {
-    font-size: 12px;
+    font-size: 13px;
   }
   .modal-backdrop {
     padding: 10px;
@@ -1027,7 +1040,7 @@ footer p {
 }
 .sort-header span {
   color: var(--ink-muted);
-  font-size: 11px;
+  font-size: 12px;
 }
 th[aria-sort="ascending"] .sort-header,
 th[aria-sort="descending"] .sort-header {
@@ -1045,7 +1058,7 @@ th[aria-sort="descending"] .sort-header {
   border-top: 1px solid var(--line-soft);
 }
 .shutdown .muted {
-  font-size: 12px;
+  font-size: 13px;
 }
 .quit {
   border-color: var(--line-strong);
@@ -1056,7 +1069,7 @@ th[aria-sort="descending"] .sort-header {
 }
 .products h4 {
   margin: 14px 0 6px;
-  font-size: 13px;
+  font-size: 14px;
   color: var(--ink-muted);
   font-weight: 600;
 }

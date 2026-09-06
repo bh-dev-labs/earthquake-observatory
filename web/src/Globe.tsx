@@ -69,7 +69,10 @@ export function Globe(p: Props) {
     scheme.addEventListener("change", repaint);
     const ro = new ResizeObserver((es) => {
       const r = es[0].contentRect;
-      setSize([r.width, Math.min(620, Math.max(360, r.width * 0.76))]);
+      setSize([
+        r.width,
+        Math.min(820, Math.max(360, r.width * 0.7, innerHeight * 0.62)),
+      ]);
     });
     if (ref.current) ro.observe(ref.current.parentElement!);
     return () => {
@@ -121,7 +124,7 @@ export function Globe(p: Props) {
           .translate([w / 2, h / 2])
       : geoOrthographic()
           .rotate([-p.camera.lon, -p.camera.lat, 0])
-          .scale(Math.min(w, h) * 0.43 * p.camera.zoom)
+          .scale(Math.min(w, h) * 0.46 * p.camera.zoom)
           .translate([w / 2, h / 2])
           .clipAngle(90);
     const path = geoPath(proj, ctx);

@@ -30,7 +30,7 @@ import {
   type Region,
 } from "./model";
 import "./style.css";
-const repository = "https://github.com/bruce-hoppe_uoft/seismic_atlas";
+const repository = "https://github.com/bruce-hoppe_uoft/earthquake-observatory";
 type SortKey = "mag" | "place" | "depth" | "time" | "status";
 const fmt = (v: number | null | undefined, digits = 1) =>
   v == null ? "Unavailable" : v.toFixed(digits);

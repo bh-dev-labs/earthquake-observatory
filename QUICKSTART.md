@@ -14,4 +14,4 @@ Data lives in the operating system's user configuration directory under `Earthqu
 Windows: keep the console window open while using the app; Ctrl+C stops it. macOS: choose **Stop the local server** at the foot of the page when finished.
 
 
-Built by Bruce Hoppe · [github.com/bruce-hoppe_uoft/seismic_atlas](https://github.com/bruce-hoppe_uoft/seismic_atlas)
+Built by Bruce Hoppe · [github.com/bruce-hoppe_uoft/earthquake-observatory](https://github.com/bruce-hoppe_uoft/earthquake-observatory)

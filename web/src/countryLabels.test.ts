@@ -7,7 +7,10 @@ import {
   countryLabels,
   countryLabelOpacity,
   countryLabelVisible,
+  labelBudget,
+  planLabels,
 } from "./countryLabels";
+import { geoContains } from "d3-geo";
 import { parseView } from "./data";
 
 const geography = JSON.parse(
@@ -36,6 +39,65 @@ test("country names come from bundled geography with mainland anchors", () => {
       (country, index) => index === 0 || labels[index - 1].area >= country.area,
     ),
   );
+});
+
+test("anchors sit inside their country and long names are shortened", () => {
+  const collection = feature(
+    geography,
+    geography.objects.countries,
+  ) as unknown as FeatureCollection;
+  for (const name of ["Chile", "Norway", "Indonesia", "Vietnam", "Japan"]) {
+    const country = collection.features.find(
+      (f) => f.properties?.name === name,
+    )!;
+    const label = labels.find((l) => l.name === name)!;
+    assert.ok(
+      geoContains(country as never, label.coordinate),
+      `${name} anchor is outside the country`,
+    );
+  }
+  assert.ok(labels.some((l) => l.name === "United States"));
+  assert.ok(!labels.some((l) => l.name === "United States of America"));
+});
+
+test("a label plan depends on zoom and scale, never on the camera", () => {
+  const measure = (name: string, size: number) => name.length * size * 0.55;
+  const near = planLabels(labels, measure, 380, 1);
+  const far = planLabels(labels, measure, 250, 0.65);
+  const close = planLabels(labels, measure, 950, 2.5);
+  assert.ok(far.length < near.length && near.length < close.length);
+  assert.ok(near.length <= labelBudget(1));
+  assert.deepEqual(
+    planLabels(labels, measure, 380, 1).map((entry) => entry.label.name),
+    near.map((entry) => entry.label.name),
+  );
+  // Nothing in a plan overlaps on the tangent plane at that scale.
+  for (const a of near)
+    for (const b of near) {
+      if (a === b) continue;
+      const [alon, alat] = a.label.coordinate,
+        [blon, blat] = b.label.coordinate;
+      let dLon = Math.abs(alon - blon);
+      if (dLon > 180) dLon = 360 - dLon;
+      const dx =
+        ((dLon * Math.PI) / 180) *
+        380 *
+        Math.max(
+          Math.cos((alat * Math.PI) / 180),
+          Math.cos((blat * Math.PI) / 180),
+        );
+      const dy = ((Math.abs(alat - blat) * Math.PI) / 180) * 380;
+      assert.ok(
+        dx >= a.halfWidth + b.halfWidth + 6 || dy >= 22,
+        `${a.label.name} overlaps ${b.label.name}`,
+      );
+    }
+  // Big names lead: the largest countries are always in the smallest plan.
+  for (const name of ["Russia", "Canada", "China", "Brazil", "Australia"])
+    assert.ok(
+      far.some((entry) => entry.label.name === name),
+      name,
+    );
 });
 
 test("country labels hide the far side of the globe but remain available on the flat map", () => {

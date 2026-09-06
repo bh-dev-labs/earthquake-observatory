@@ -10,7 +10,9 @@ import type { FeatureCollection } from "geojson";
 import {
   countryLabels,
   countryLabelOpacity,
+  planLabels,
   type CountryLabel,
+  type LabelPlan,
 } from "./countryLabels";
 import { validRegion, type Section } from "./data";
 import { corridorLines } from "./science";
@@ -57,9 +59,12 @@ export function Globe(p: Props) {
     [cursor, setCursor] = useState(""),
     [spoken, setSpoken] = useState("");
   const hits = useRef<{ e: Event; x: number; y: number; r: number }[]>([]);
-  // Names drawn last frame keep their place first, so a larger neighbour
-  // rotating into view cannot evict them and cascade the rest.
-  const shownLabels = useRef(new Set<string>());
+  // The label plan depends on zoom, canvas size and projection, never on
+  // where the globe points, so it is reused across every frame of a rotation.
+  const labelPlan = useRef<{ key: string; plan: LabelPlan }>({
+    key: "",
+    plan: [],
+  });
   const pointers = useRef(new Map<number, [number, number]>());
   const drag = useRef({ x: 0, y: 0, moved: 0, pinch: 0, multi: false });
   useEffect(() => {
@@ -249,72 +254,48 @@ export function Globe(p: Props) {
       ctx.setLineDash([]);
     }
     if (p.countries) {
-      const occupied: {
-        left: number;
-        right: number;
-        top: number;
-        bottom: number;
-      }[] = [];
-      const kept = new Set<string>();
+      const key = [countries.length, w, h, p.camera.zoom, p.flat].join();
+      if (labelPlan.current.key !== key) {
+        labelPlan.current = {
+          key,
+          plan: planLabels(
+            countries,
+            (name, size) => {
+              ctx.font = `${size}px sans-serif`;
+              return ctx.measureText(name).width;
+            },
+            proj.scale(),
+            p.camera.zoom,
+          ),
+        };
+      }
       ctx.save();
-      ctx.font = "12px sans-serif";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       ctx.fillStyle = token("--ink-strong");
       ctx.strokeStyle = token("--globe-ocean");
       ctx.lineWidth = 3;
       ctx.lineJoin = "round";
-      const previous = shownLabels.current;
-      const candidates = [
-        ...countries.filter((country) => previous.has(country.name)),
-        ...countries.filter((country) => !previous.has(country.name)),
-      ];
-      for (const country of candidates) {
+      for (const { label, size } of labelPlan.current.plan) {
         const alpha = countryLabelOpacity(
-          country,
+          label,
           [p.camera.lon, p.camera.lat],
           p.flat,
         );
         if (alpha <= 0) continue;
-        const point = proj(country.coordinate);
+        const point = proj(label.coordinate);
         if (!point) continue;
         // Whole-pixel anchors: text re-antialiased at a new subpixel offset
         // every frame reads as shimmer while the globe turns.
-        const leftToRight = Math.round(point[0]),
-          topToBottom = Math.round(point[1]);
-        const halfWidth = ctx.measureText(country.name).width / 2 + 4;
-        const box = {
-          left: leftToRight - halfWidth,
-          right: leftToRight + halfWidth,
-          top: topToBottom - 9,
-          bottom: topToBottom + 9,
-        };
-        if (
-          box.left < 4 ||
-          box.right > w - 4 ||
-          box.top < 4 ||
-          box.bottom > h - 4
-        )
-          continue;
-        if (
-          occupied.some(
-            (other) =>
-              box.left < other.right &&
-              box.right > other.left &&
-              box.top < other.bottom &&
-              box.bottom > other.top,
-          )
-        )
-          continue;
-        occupied.push(box);
-        kept.add(country.name);
+        const x = Math.round(point[0]),
+          y = Math.round(point[1]);
+        ctx.font = `${size}px sans-serif`;
         ctx.globalAlpha = alpha;
-        ctx.strokeText(country.name, leftToRight, topToBottom);
-        ctx.fillText(country.name, leftToRight, topToBottom);
+        ctx.strokeText(label.name, x, y);
+        ctx.fillText(label.name, x, y);
       }
       ctx.globalAlpha = 1;
       ctx.restore();
-      shownLabels.current = kept;
     }
     hits.current = [];
     const ordered = [

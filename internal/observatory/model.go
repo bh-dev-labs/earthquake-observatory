@@ -7,21 +7,28 @@ import (
 )
 
 type Properties struct {
-	Mag     *float64 `json:"mag"`
-	Place   string   `json:"place"`
-	Time    int64    `json:"time"`
-	Updated int64    `json:"updated"`
-	URL     string   `json:"url"`
-	Detail  string   `json:"detail"`
-	MagType string   `json:"magType"`
-	Status  string   `json:"status"`
-	Type    string   `json:"type"`
-	Net     string   `json:"net"`
-	IDs     string   `json:"ids"`
-	Felt    *int     `json:"felt"`
-	CDI     *float64 `json:"cdi"`
-	MMI     *float64 `json:"mmi"`
-	Types   string   `json:"types"`
+	Mag             *float64 `json:"mag"`
+	Place           string   `json:"place"`
+	Time            int64    `json:"time"`
+	Updated         int64    `json:"updated"`
+	URL             string   `json:"url"`
+	Detail          string   `json:"detail"`
+	MagType         string   `json:"magType"`
+	Status          string   `json:"status"`
+	Type            string   `json:"type"`
+	Net             string   `json:"net"`
+	IDs             string   `json:"ids"`
+	Felt            *int     `json:"felt"`
+	CDI             *float64 `json:"cdi"`
+	MMI             *float64 `json:"mmi"`
+	Types           string   `json:"types"`
+	HorizontalError *float64 `json:"horizontalError,omitempty"`
+	DepthError      *float64 `json:"depthError,omitempty"`
+	MagError        *float64 `json:"magError,omitempty"`
+	Gap             *float64 `json:"gap,omitempty"`
+	RMS             *float64 `json:"rms,omitempty"`
+	Dmin            *float64 `json:"dmin,omitempty"`
+	Nst             *int     `json:"nst,omitempty"`
 }
 type Feature struct {
 	Type       string     `json:"type"`

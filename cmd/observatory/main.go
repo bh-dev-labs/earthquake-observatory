@@ -72,6 +72,7 @@ func main() {
 	svc := observatory.NewService(store)
 	static, _ := fs.Sub(assets, "dist")
 	mux := http.NewServeMux()
+	registerWorkspaceRoutes(mux, svc, store)
 	reply := func(w http.ResponseWriter, v any, err error) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("Cache-Control", "no-store")
@@ -113,7 +114,13 @@ func main() {
 		}
 		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Minute)
 		defer cancel()
-		d, e := svc.History(ctx, a, b, m)
+		var d observatory.Dataset
+		var e error
+		if job := q.Get("job"); job != "" {
+			d, e = svc.HistoryTracked(ctx, a, b, m, job)
+		} else {
+			d, e = svc.History(ctx, a, b, m)
+		}
 		reply(w, d, e)
 	})
 	mux.HandleFunc("GET /api/detail/{id}", func(w http.ResponseWriter, r *http.Request) {

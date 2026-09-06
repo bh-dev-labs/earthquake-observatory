@@ -1,6 +1,8 @@
 import { memo } from "preact/compat";
 import type { Ref } from "preact";
 import { zoneLabel, type Event } from "./model";
+import type { Detail } from "./data";
+import { uncertainty } from "./science";
 
 type Props = {
   selected: Event;
@@ -16,6 +18,7 @@ type Props = {
   getDetail: (e: Event) => void;
   products: Record<string, unknown>;
   detailLoaded: boolean;
+  detail: Detail | null;
   fetched: string;
   centreOnSelection: () => void;
   share: () => void;
@@ -57,6 +60,7 @@ function SelectedEventView({
   getDetail,
   products,
   detailLoaded,
+  detail,
   fetched,
   centreOnSelection,
   share,
@@ -159,14 +163,40 @@ function SelectedEventView({
           </>
         ) : (
           <p class="muted">
-            Nobody submitted a felt report for this earthquake, and USGS
-            published no shaking estimate.
+            Felt reports and shaking estimates are unavailable in this record.
+            Missing values do not establish that no reports or estimates exist.
           </p>
         )}
+      </details>
+      <details class="uncertainty">
+        <summary>Source uncertainty & quality</summary>
+        <dl>
+          {uncertainty(selected, detail).map((value) => (
+            <div key={value.key}>
+              <dt>{value.label}</dt>
+              <dd>
+                {value.value === null
+                  ? "Unavailable"
+                  : `${value.value} ${value.unit}`}
+                {value.live && <small> (current source detail)</small>}
+              </dd>
+            </div>
+          ))}
+        </dl>
+        <p class="muted">
+          Source-reported estimates, not a uniform confidence interval or a
+          measure of local hazard. Unavailable is not zero. Current detail can
+          be newer than the loaded snapshot.
+        </p>
       </details>
       <div class="products">
         <h4>Related USGS products</h4>
         {detailBusy && <p>Loading additional product links…</p>}
+        {!detailLoaded && !detailBusy && !detailError && (
+          <button onClick={() => getDetail(selected)}>
+            Load current source details
+          </button>
+        )}
         {detailError && (
           <p>
             {detailError}{" "}
@@ -174,14 +204,16 @@ function SelectedEventView({
           </p>
         )}
         {Object.entries(products)
-          .filter(([key]) =>
-            [
-              "shakemap",
-              "dyfi",
-              "losspager",
-              "moment-tensor",
-              "origin",
-            ].includes(key),
+          .filter(
+            ([key]) =>
+              !!safeURL(selected.properties.url) &&
+              [
+                "shakemap",
+                "dyfi",
+                "losspager",
+                "moment-tensor",
+                "origin",
+              ].includes(key),
           )
           .map(([key]) => (
             <p key={key}>

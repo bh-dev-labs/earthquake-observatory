@@ -2,6 +2,14 @@
 
 This is a functioning local release candidate. **It is not a claim that every publication gate in the much larger build specification is complete.** Source, runtime functionality and cross-platform archives are delivered; the remaining gates below are explicit.
 
+## Unreleased source update
+
+The current source includes validated snapshots/shared views, exact retries and committed queries, UTC offset fixes, progress/cancellation, pinned investigations and notes, cache management, revision comparison, source uncertainty and custom transects. The existing 0.1.0 archives and their historical reports below were not regenerated.
+
+New verification: 20 frontend unit tests; Go persistence, API mutation protection, UTC/progress and cancellation tests; and the isolated `npm run test:browser` suite covering review regressions, pin/reopen/rerun/compare workflows, cache clearing, custom transects, desktop/mobile canvas pixels and animation, no document overflow, and zero axe violations. Source screenshots were inspected at 1440 and 390 pixels. Native Intel/Windows execution, signing/notarization, expert scientific review and a full accessibility audit remain outstanding. The new tests do not claim live-provider or cross-platform acceptance.
+
+Pinned storage has no automatic byte quota. Cache clearing reports payload/allocated-page sizes and retains pins; SQLite may reuse rather than shrink freed pages. Source uncertainty is exposed with provenance but not rendered as confidence bands. Historical progress counts completed partitions rather than claiming a known percentage of remaining work.
+
 ## Executed evidence
 
 Host: macOS arm64, Go 1.27.1, Node 26.8.1, headless Chromium 153.0.8010.12. Verification date 2026-09-06 UTC / September 5 America/Toronto.

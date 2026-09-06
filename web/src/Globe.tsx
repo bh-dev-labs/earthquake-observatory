@@ -6,6 +6,8 @@ import {
   geoGraticule10,
 } from "d3-geo";
 import { feature } from "topojson-client";
+import { validRegion, type Section } from "./data";
+import { corridorLines } from "./science";
 import {
   color,
   radius,
@@ -26,6 +28,7 @@ type Props = {
   plates: boolean;
   region: Region | null;
   section: boolean;
+  transect: Section;
   auto: boolean;
   speed: number;
   pause: () => void;
@@ -168,7 +171,7 @@ export function Globe(p: Props) {
         }
       }
     }
-    if (p.region) {
+    if (p.region && validRegion(p.region)) {
       const r = p.region;
       const lines: any = { type: "MultiLineString", coordinates: [] };
       const east = r.east < r.west ? r.east + 360 : r.east;
@@ -177,11 +180,17 @@ export function Globe(p: Props) {
         bottom = [],
         left = [],
         right = [];
-      for (let x = r.west; x <= east; x += 1) {
+      for (let offset = 0; offset <= Math.min(360, east - r.west); offset++) {
+        const x = r.west + offset;
         top.push([norm(x), r.north]);
         bottom.push([norm(x), r.south]);
       }
-      for (let y = r.south; y <= r.north; y += 1) {
+      for (
+        let offset = 0;
+        offset <= Math.min(180, r.north - r.south);
+        offset++
+      ) {
+        const y = r.south + offset;
         left.push([r.west, y]);
         right.push([r.east, y]);
       }
@@ -196,30 +205,20 @@ export function Globe(p: Props) {
     }
     if (p.section) {
       ctx.beginPath();
-      path({
-        type: "LineString",
-        coordinates: [
-          [170, -22],
-          [-170, -22],
-        ],
-      });
+      const corridor = corridorLines(p.transect);
+      path({ type: "LineString", coordinates: corridor.coordinates[0] || [] });
       ctx.strokeStyle = token("--ink");
       ctx.lineWidth = 3;
       ctx.stroke();
-      for (const lat of [-20.2, -23.8]) {
-        ctx.beginPath();
-        path({
-          type: "LineString",
-          coordinates: [
-            [170, lat],
-            [-170, lat],
-          ],
-        });
-        ctx.setLineDash([4, 4]);
-        ctx.lineWidth = 1;
-        ctx.stroke();
-        ctx.setLineDash([]);
-      }
+      ctx.beginPath();
+      path({
+        type: "MultiLineString",
+        coordinates: corridor.coordinates.slice(1),
+      });
+      ctx.setLineDash([4, 4]);
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      ctx.setLineDash([]);
     }
     hits.current = [];
     const ordered = [
@@ -272,6 +271,7 @@ export function Globe(p: Props) {
     p.plates,
     p.region,
     p.section,
+    p.transect,
     size,
     theme,
     cursor,

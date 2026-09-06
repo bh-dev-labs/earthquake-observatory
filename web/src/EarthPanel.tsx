@@ -1,6 +1,7 @@
 import { memo } from "preact/compat";
 import { Globe, type Camera } from "./Globe";
 import { color, type Event, type Region } from "./model";
+import type { Section } from "./data";
 
 type Props = {
   events: Event[];
@@ -14,6 +15,7 @@ type Props = {
   setPlates: (v: boolean) => void;
   region: Region | null;
   section: boolean;
+  transect: Section;
   auto: boolean;
   autoWanted: boolean;
   toggleAuto: () => void;
@@ -34,6 +36,7 @@ function EarthPanelView({
   setPlates,
   region,
   section,
+  transect,
   auto,
   autoWanted,
   toggleAuto,
@@ -65,6 +68,7 @@ function EarthPanelView({
         plates={plates}
         region={region}
         section={section}
+        transect={transect}
         auto={auto}
         speed={speed}
         pause={pause}

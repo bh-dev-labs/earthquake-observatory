@@ -10,4 +10,10 @@ The interface is split into memoised components — `EarthPanel`, `SelectedEvent
 
 API datasets are immutable snapshots identified by SHA-256. SQLite stores original JSON, query, retrieval metadata, and transactional event revisions separately from memberships. Live requests coalesce behind a mutex and share a 60-second cache. Historical queries split at the USGS response cap and publish only after completion. Historical snapshots are repeatable observations of a mutable catalog, not a transactional view of USGS.
 
-Plan: build ingestion/store/API and globe; coordinate filters, areas and replay; complete educational controls and export; test failures, geography and consumer builds; record release gaps explicitly.
+`data.ts` validates snapshots, shared views and detail payloads before rendering. `useDataset.ts` owns loading, exact retries, committed queries, progress and request-generation cancellation. Imports and investigation reopening invalidate older asynchronous work. Offline pins retain their query for explicit reruns but do not auto-refresh. Pagination clamps to the current result count.
+
+`Investigations.tsx` is memoised and reads the view through a stable callback, avoiding camera-frame rerenders. Pins live in SQLite's `investigations` table independently of rolling-cache eviction; annotation updates cannot alter the stored dataset. `revisions.ts` compares latest revisions and known aliases, separating changed, added and absent records without treating absence as deletion.
+
+`science.ts` extracts source-labelled uncertainty and generates bounded spherical transect guides. The editor, globe and depth chart share validated endpoints and width. Membership uses great-circle along/cross-track distance; responsive depth-chart coordinates keep labels in real pixels.
+
+The browser regression suite builds and starts a temporary isolated server/database, mocks provider responses, exercises workflows, checks canvas pixels/animation, and runs axe at desktop and mobile sizes. It does not replace native-platform acceptance or expert scientific review.

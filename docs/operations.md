@@ -6,7 +6,13 @@ Flags: `-addr` (default 127.0.0.1:8787), `-data-dir` (default OS user config/Ear
 
 Recent requests share a 60-second cached response and serialize refreshes. The browser requests refresh each minute when visible, outside history/replay/inspection. Backend concurrency is bounded at four upstream requests, with one historical job. HTTP timeout 30 seconds, retries up to three with jitter for transient/throttling responses, 32 MiB response cap. Conditional validators are retained in a bounded memory cache. Event detail cache expires after five minutes. The last good recent dataset survives an upstream error and is clearly stale. A historical job publishes atomically only on success; browser cancellation cancels its request context.
 
-SQLite migration 1 is idempotent on startup (see store.go). Transactional upserts refuse older event revisions. Cache retention: latest 40 datasets; unreferenced events/members are removed. Export files are user-owned and never expired by the application. SQLite can reuse freed pages; it does not automatically shrink its file. No hard disk-byte budget is implemented yet.
+SQLite schema versions 1 and 2 are installed idempotently on startup. Version 2 adds investigations without rewriting existing cache data. Transactional upserts refuse older event revisions. Cache retention: latest 40 datasets; unreferenced events/members are removed. Investigations store immutable dataset envelopes and views separately, with editable names and notes. Export files and pins never expire automatically. SQLite reuses freed pages but does not automatically shrink its file. No hard disk-byte budget is implemented.
+
+Reopened snapshots do not auto-refresh; rerunning the saved query is explicit. Frontend detail entries expire after five minutes, invalidate when an event's update timestamp changes, and are capped at 32. Historical jobs expose actual upstream attempts, completed leaf partitions and collected events. Cancellation aborts the browser request and requests server cancellation. At most 32 job records are retained in memory, evicting finished records first.
+
+**Local cache** reports cached payload bytes, pinned payload bytes and allocated database pages, not total filesystem usage including WAL/journal overhead. Clearing the rolling cache also clears the server response cache but preserves pins and the current browser view. Delete pins separately. Names are limited to 120 UTF-8 bytes, notes to 10,000 bytes, views to 64 KiB, and snapshots to 40 MiB/50,000 events. There is no automatic pinned-data quota or pruning policy.
+
+Mutation endpoints require matching `Origin` and `Sec-Fetch-Site: same-origin` headers. Investigation JSON requests are capped at 42 MiB. These checks are not authentication for public hosting. Notes are local and not encrypted by the application. Backups include investigations and notes.
 
 ## Backup and restore
 

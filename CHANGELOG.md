@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Fixed shared-region validation and bounded drawing loops; malformed snapshots no longer reach rendering.
+- Extracted typed loading and committed queries. Imports invalidate pending work, Retry repeats failed queries, links ignore unsent edits, and pagination clamps when results shrink.
+- Normalize historical timestamps to UTC and reject submillisecond boundaries; added bounded progress and cancellation status.
+- Added SQLite-pinned investigations, saved views, editable notes, offline reopening, query reruns, revision comparisons and comparison CSV export.
+- Added cache inspection/reopening/removal without deleting pins; backups include investigations and notes.
+- Added source-labelled uncertainty fields and corrected missing-report language. Detail caches use a five-minute TTL and frontend revision invalidation.
+- Added custom spherical transects, a Tonga preset, selected-event endpoints and readable mobile axes; settings survive pinned/shared views and appear in export metadata.
+- Added snapshot checksum verification and isolated browser regression tests with desktop/mobile pixel and accessibility checks.
+
 - Attribution links to the repository instead of publishing an email address, and states that the project is independent of the University of Toronto and the USGS.
 - The release string is single-sourced from `package.json` and reaches Go through `-ldflags`; an unflagged build reports `dev`.
 - Colour moved to CSS custom properties with a dark theme, and depth now uses one sequential light-to-dark ramp instead of three unrelated hues.

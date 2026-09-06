@@ -29,6 +29,8 @@ type Service struct {
 	network   chan struct{}
 	cacheMu   sync.Mutex
 	responses map[string]responseCache
+	jobsMu    sync.Mutex
+	jobs      map[string]*historyJob
 }
 
 func NewService(s *Store) *Service {
@@ -58,6 +60,7 @@ func (s *Service) Fetch(ctx context.Context, u string) ([]byte, error) {
 	}
 	var last error
 	for attempt := 0; attempt < 3; attempt++ {
+		s.updateProgress(ctx, func(progress *Progress) { progress.Requests++ })
 		req, err := http.NewRequestWithContext(ctx, "GET", u, nil)
 		if err != nil {
 			return nil, err
@@ -76,6 +79,10 @@ func (s *Service) Fetch(ctx context.Context, u string) ([]byte, error) {
 			b, readErr := io.ReadAll(io.LimitReader(res.Body, 32<<20+1))
 			res.Body.Close()
 			if res.StatusCode == 304 && hasCached {
+				cached.fetched = time.Now()
+				s.cacheMu.Lock()
+				s.responses[u] = cached
+				s.cacheMu.Unlock()
 				return cached.body, nil
 			}
 			if res.StatusCode == 204 {
@@ -149,13 +156,14 @@ func (s *Service) Recent(ctx context.Context, period string) (Dataset, error) {
 	return Dataset{}, err
 }
 func (s *Service) History(ctx context.Context, start, end time.Time, min float64) (Dataset, error) {
+	start, end = start.UTC(), end.UTC()
 	select {
 	case s.slots <- struct{}{}:
 		defer func() { <-s.slots }()
 	default:
 		return Dataset{}, fmt.Errorf("another historical search is running; try again shortly")
 	}
-	if !end.After(start) || end.Sub(start) > 31*24*time.Hour || end.After(time.Now().Add(time.Minute)) || min < -2 || min > 10 || math.IsNaN(min) || math.IsInf(min, 0) {
+	if end.Sub(start) < time.Millisecond || start.Nanosecond()%int(time.Millisecond) != 0 || end.Nanosecond()%int(time.Millisecond) != 0 || end.Sub(start) > 31*24*time.Hour || end.After(time.Now().Add(time.Minute)) || min < -2 || min > 10 || math.IsNaN(min) || math.IsInf(min, 0) {
 		return Dataset{}, fmt.Errorf("use a past UTC interval of 1 millisecond to 31 days and magnitude -2 to 10")
 	}
 	query := fmt.Sprintf("USGS catalog [%s,%s) magnitude >= %g", start.Format(time.RFC3339Nano), end.Format(time.RFC3339Nano), min)
@@ -201,9 +209,13 @@ func (s *Service) History(ctx context.Context, start, end time.Time, min float64
 		if len(all) > 50000 {
 			return fmt.Errorf("50,000-event budget exceeded; narrow the query")
 		}
+		s.updateProgress(ctx, func(progress *Progress) { progress.Partitions++; progress.Events = len(all) })
 		return nil
 	}
 	if err := part(start, end); err != nil {
+		return Dataset{}, err
+	}
+	if err := ctx.Err(); err != nil {
 		return Dataset{}, err
 	}
 	c := Collection{Type: "FeatureCollection", Features: []Feature{}}

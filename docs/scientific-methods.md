@@ -10,15 +10,25 @@ Explicit rectangular filters use inclusive boundaries, with west > east denoting
 
 ## Time, replay and charts
 
-Historical date inputs mean 00:00 UTC. Internal intervals are [start,end); the USGS inclusive end parameter is end minus 1 ms. History is limited to 31 days, 50,000 events, 64 requests and two minutes. A 20,000-record response triggers recursive time partitioning. IDs deduplicate partition membership. Dense millisecond partitions fail clearly rather than silently truncating.
+Historical date inputs mean 00:00 UTC. RFC3339 API offsets are converted to UTC before upstream formatting. Boundaries must have millisecond precision. Internal intervals are [start,end); the USGS inclusive end parameter is end minus 1 ms. History is limited to 31 days, 50,000 events, 64 partition queries and two minutes; retries can add upstream attempts. A 20,000-record response triggers recursive time partitioning. IDs deduplicate partition membership. Dense millisecond partitions fail clearly rather than silently truncating.
 
 Replay is cumulative through an inclusive cursor. Seeking recomputes membership, so future observations disappear when seeking backward. Replay and camera rotation are separate. Camera movement and event selection pause animations. Hidden tabs do not advance either clock. Charts and exports describe the active cursor, not the entire historical period.
 
-Count bins are [00:00 UTC,next 00:00 UTC); first/last days may be partial. Magnitude histogram bins are [m,m+1), from −2 through 10; missing magnitudes excluded. Depth/magnitude scatter excludes either missing coordinate. No completeness magnitude, aftershock relationship, Gutenberg–Richter fit or energy aggregation is inferred.
+Count bins use UTC boundaries: hourly for spans up to three days, six-hourly up to fourteen days, then daily or wider bins to bound long imported spans to approximately 120 bins. First/last bins may be partial. Magnitude histogram bins are [m,m+1), from −2 through 10; missing magnitudes excluded. Depth/magnitude scatter excludes either missing coordinate. No completeness magnitude, aftershock relationship, Gutenberg–Richter fit or energy aggregation is inferred.
 
 ## Depth section
 
-Tonga transect runs from 170°E,22°S to 170°W,22°S along a great circle. The sampling corridor is ±200 km perpendicular to that arc. For angular distance d and bearing difference θ, cross-track = R asin(sin(d)sin(θ)); along-track = R atan2(sin(d)cos(θ),cos(d)). Include points only within the corridor and between endpoints. The screen has depth positive down. It plots catalog source depths, not fitted slab geometry. The boundary drawn around the corridor is an approximate contextual guide; exact membership uses the spherical formula. Coordinate/depth uncertainties are not plotted in this release.
+The Tonga preset runs from 170°E,22°S to 170°W,22°S with a 400 km total corridor. Users can select other endpoints and widths of 1-2,000 km. Coincident and nearly antipodal endpoints are rejected because they do not define a stable unique arc. For angular distance d and bearing difference θ, cross-track = R asin(sin(d)sin(θ)); along-track = R atan2(sin(d)cos(θ),cos(d)). Include points only within half the width and between endpoints. The globe guide samples this spherical corridor at 65 points per edge; connecting segments remain a display approximation.
+
+The section includes known depths even when magnitude is missing. Depth is positive down; axes include negative depths and scale to the observations. Vertical exaggeration reflects the rendered dimensions and changes with viewport width. This is not fitted slab geometry. Uncertainty appears in the details panel, not as plotted confidence bands.
+
+## Uncertainty and revisions
+
+Available horizontal/depth/magnitude error estimates, azimuthal gap, residual RMS, nearest-station distance and station count appear under **Source uncertainty & quality**. Snapshot fields take precedence. Missing values can be supplemented from current detail or the preferred available origin product and are labelled as current source detail. Such values never alter a pin. Provider estimates do not share a guaranteed confidence level across networks; unavailable is not zero. Missing felt/shaking fields do not establish that no reports or products exist.
+
+Revision comparison matches IDs and returned aliases, comparing magnitude/type, depth, coordinates, origin time, status, description and felt/shaking fields. An absent record is not automatically deleted: queries, export filters and rolling windows can change membership without any catalog revision.
+
+## Magnitude illustration
 
 Magnitude illustration uses 10^(B−A) for amplitude and approximately 10^(1.5(B−A)) for energy, with compatible-scale assumptions. Inputs are illustrative, not automatically drawn from mixed catalog magnitude types. Neither ratio predicts local shaking or impact. Sources are in the shared registry.
 

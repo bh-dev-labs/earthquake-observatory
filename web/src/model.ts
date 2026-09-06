@@ -18,6 +18,13 @@ export type Event = {
     mmi: number | null;
     types: string;
     ids: string;
+    horizontalError?: number | null;
+    depthError?: number | null;
+    magError?: number | null;
+    gap?: number | null;
+    rms?: number | null;
+    dmin?: number | null;
+    nst?: number | null;
   };
 };
 export type Dataset = {

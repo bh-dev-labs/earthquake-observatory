@@ -16,6 +16,8 @@ The app opens `http://127.0.0.1:8787`. Only the local computer can access the se
 
 ## Development
 
+The current source adds saved investigations, revision comparisons, cache controls, retrieval progress, source uncertainty and custom transects. Existing `release/` archives have not been rebuilt for these unreleased changes; build from source to use them.
+
 Prerequisites: Go 1.26+ (tested with 1.27.1), Node 22.12+ (tested with 26.8.1), npm. Python 3 is used only to create ZIP archives. Pinned dependencies are in go.mod/go.sum and package-lock.json.
 
 macOS/Linux:
@@ -46,6 +48,7 @@ go run ./cmd/observatory -demo -addr 127.0.0.1:8788 -data-dir ./local-data
 npm test
 npm run check
 npm run format:check
+npm run test:browser
 go test -race ./...
 go vet ./...
 # Browser QA: run a demo instance at :8787 first
@@ -61,9 +64,19 @@ Select a **Current area of activity** to centre Earth and apply visible bounds. 
 
 Drag to rotate, pinch to zoom, or focus the canvas before using the wheel. Buttons provide keyboard equivalents. Select markers directly; overlapping markers open a chooser. Event selection pauses both camera rotation and replay. Resume each explicitly. The 2D map, table, charts and exports share the same filters and replay cursor.
 
-**Learn** offers four guided activities on a fixed, real USGS snapshot. **Show Tonga depth section** displays a linked great-circle cross-section. All educational explanations are deterministic and sourced.
+**Learn** offers four guided activities on a fixed, real USGS snapshot. **Show depth section** opens a linked great-circle cross-section with editable endpoints and corridor width, a Tonga preset, and buttons to use the selected earthquake as an endpoint. All educational explanations are deterministic and sourced.
 
 **Export GeoJSON snapshot** saves every matching event and provenance metadata. Reopen that file offline using **Reopen snapshot**. CSV exports also download a metadata companion; browsers may request permission for multiple downloads. A shared link reapplies a query on a running observatory; it is not a publicly hosted URL or an immutable catalog snapshot.
+
+## Investigations and source details
+
+For a repeatable study, enter a name and notes under **Saved investigations**, then choose **Pin current snapshot**. This saves the full loaded dataset and its view separately from the rolling cache. **Save name & notes** changes annotations without changing observations. **Reopen pinned snapshot** restores it offline; **Run saved query** retrieves the original query without replacing the pinned copy. Imported snapshots without a query cannot be rerun.
+
+Choose **Compare revisions** to compare the selected investigation with the current dataset. Inspect changed, added and absent records and export a comparison CSV. Absence is not evidence of catalog deletion, especially when source queries differ. Expand **Local cache** to inspect, reopen or remove cached datasets. Clearing the cache retains pinned investigations. Database backups include pins and notes.
+
+Historical searches report upstream requests, completed partitions and observations. Cancellation preserves the prior dataset; Retry repeats the failed dates and magnitude threshold. Copied history links use the successfully loaded query, not unsubmitted edits. Selected-event **Source uncertainty & quality** shows available source error estimates and station-quality fields. Missing values remain unavailable, not zero; current-detail values are labelled because they may be newer than a snapshot.
+
+`npm run test:browser` builds and runs deterministic Chromium checks with its own temporary database and loopback port. Install Chromium first with `npx playwright install chromium`. The suite does not contact USGS or delete existing user data.
 
 ## Troubleshooting
 

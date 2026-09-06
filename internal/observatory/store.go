@@ -6,8 +6,9 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	_ "modernc.org/sqlite"
 	"time"
+
+	_ "modernc.org/sqlite"
 )
 
 type Dataset struct {
@@ -33,7 +34,9 @@ func Open(path string) (*Store, error) {
  CREATE TABLE IF NOT EXISTS events(id TEXT PRIMARY KEY, updated INTEGER NOT NULL, payload BLOB NOT NULL);
  CREATE TABLE IF NOT EXISTS datasets(id TEXT PRIMARY KEY, query TEXT NOT NULL, fetched TEXT NOT NULL, payload BLOB NOT NULL);
  CREATE TABLE IF NOT EXISTS members(dataset TEXT NOT NULL, event TEXT NOT NULL, PRIMARY KEY(dataset,event));
- CREATE INDEX IF NOT EXISTS datasets_query ON datasets(query,fetched);`)
+ CREATE INDEX IF NOT EXISTS datasets_query ON datasets(query,fetched);
+ CREATE TABLE IF NOT EXISTS investigations(id TEXT PRIMARY KEY, name TEXT NOT NULL, notes TEXT NOT NULL, created TEXT NOT NULL, view BLOB NOT NULL, snapshot BLOB NOT NULL);
+ INSERT OR IGNORE INTO schema_version VALUES(2);`)
 	if err != nil {
 		db.Close()
 		return nil, err

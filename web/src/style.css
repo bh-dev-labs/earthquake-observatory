@@ -135,14 +135,117 @@
 body {
   margin: 0;
 }
+.investigations {
+  padding: 24px 30px;
+  margin: 24px 0;
+  border-block: 1px solid var(--line);
+}
+.investigation-grid,
+.transect-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.investigation-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.investigation-grid label,
+.transect-fields label {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 5px;
+  min-width: 0;
+}
+.investigation-grid input,
+.investigation-grid select,
+.investigation-grid textarea,
+.transect-editor .transect-fields input {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+.investigation-notes {
+  grid-column: 1 / -1;
+}
+textarea {
+  resize: vertical;
+}
+.investigations p,
+.investigations td,
+.uncertainty dd {
+  overflow-wrap: anywhere;
+}
+.investigations .button-row {
+  flex-wrap: wrap;
+}
+.investigations button {
+  white-space: normal;
+}
+.cache-manager,
+.revision-comparison {
+  margin-top: 20px;
+}
+.cache-manager td:first-child {
+  max-width: 420px;
+}
+.cache-manager td:last-child {
+  min-width: 170px;
+}
+.transect-editor {
+  margin: 16px 30px 28px;
+}
+.transect-editor fieldset {
+  min-width: 0;
+  border: 1px solid var(--line);
+  padding: 16px;
+}
+.transect-editor legend {
+  padding: 0 8px;
+}
+.retrieval-progress {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+.retrieval-progress progress {
+  accent-color: var(--accent);
+  max-width: 100%;
+}
+@media (max-width: 600px) {
+  .investigations {
+    padding: 24px 18px;
+  }
+  .investigation-grid {
+    grid-template-columns: 1fr;
+  }
+  .transect-editor {
+    margin-inline: 18px;
+  }
+  .investigations .section-heading {
+    align-items: flex-start;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .transect-fields {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .transect-editor fieldset {
+    padding: 10px;
+  }
+}
 button,
 input,
+textarea,
 select {
   font: inherit;
   color: inherit;
 }
 button,
 select,
+textarea,
 input {
   border: 1px solid var(--line);
   border-radius: 5px;
@@ -181,6 +284,7 @@ input[type="range"] {
 button:focus-visible,
 a:focus-visible,
 input:focus-visible,
+textarea:focus-visible,
 select:focus-visible,
 summary:focus-visible,
 canvas:focus-visible {

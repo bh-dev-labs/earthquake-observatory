@@ -9,6 +9,7 @@ import {
 } from "./model";
 import { useState } from "preact/hooks";
 import { useMeasure } from "./hooks";
+import type { Section } from "./data";
 
 const HOUR = 3600000,
   DAY = 86400000;
@@ -23,7 +24,12 @@ function timeBins(events: Event[]) {
   const min = Math.min(...times),
     max = Math.max(...times);
   const span = max - min;
-  const size = span <= 3 * DAY ? HOUR : span <= 14 * DAY ? 6 * HOUR : DAY;
+  const size =
+    span <= 3 * DAY
+      ? HOUR
+      : span <= 14 * DAY
+        ? 6 * HOUR
+        : Math.max(1, Math.ceil(span / DAY / 120)) * DAY;
   const counts = new Map<number, number>();
   for (let t = Math.floor(min / size) * size; t <= max; t += size)
     counts.set(t, 0);
@@ -41,12 +47,18 @@ function timeBins(events: Event[]) {
 
 // Prose form: "each hour", "each six-hour period", "each day".
 function binUnit(size: number) {
-  return size === DAY ? "day" : size === 6 * HOUR ? "six-hour period" : "hour";
+  return size >= DAY
+    ? size === DAY
+      ? "day"
+      : `${size / DAY}-day period`
+    : size === 6 * HOUR
+      ? "six-hour period"
+      : "hour";
 }
 
 function binName(size: number) {
-  return size === DAY
-    ? "UTC days"
+  return size >= DAY
+    ? `${size / DAY}-day UTC bins`
     : size === 6 * HOUR
       ? "6-hour UTC bins"
       : "hourly UTC bins";
@@ -54,14 +66,14 @@ function binName(size: number) {
 
 function binLabel(start: number, size: number) {
   const d = new Date(start);
-  return size === DAY
+  return size >= DAY
     ? `${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`
     : `${pad(d.getUTCDate())} ${pad(d.getUTCHours())}:00`;
 }
 
 function binFull(start: number, size: number) {
   const d = new Date(start);
-  return size === DAY
+  return size >= DAY
     ? d.toISOString().slice(0, 10)
     : d.toISOString().slice(0, 16).replace("T", " ") + " UTC";
 }
@@ -117,12 +129,14 @@ function AnalysisView({
   select,
   selected,
   section,
+  sectionConfig,
   query,
 }: {
   events: Event[];
   select: (e: Event) => void;
   selected: string;
   section: boolean;
+  sectionConfig: Section;
   query: string;
 }) {
   const [a, setA] = useState(4),
@@ -153,18 +167,31 @@ function AnalysisView({
   const depthY = (d: number) =>
     PLOT.top + (d / maxDepth) * (PLOT.bottom - PLOT.top);
   const ratio = comparison(a, b);
-  const start: [number, number] = [170, -22],
-    end: [number, number] = [-170, -22];
-  const cross = points
+  const { start, end, width } = sectionConfig;
+  const cross = events
+    .filter((event) => event.geometry.coordinates[2] !== null)
     .map((e) => ({
       e,
       ...transect(
         e.geometry.coordinates.slice(0, 2) as [number, number],
         start,
         end,
+        width,
       ),
     }))
     .filter((e) => e.inside);
+  const sectionDepths = cross.map((point) => point.e.geometry.coordinates[2]!);
+  const sectionMin = Math.min(0, ...sectionDepths);
+  const sectionMax = Math.max(100, ...sectionDepths);
+  const sectionY = (depth: number) =>
+    30 + ((depth - sectionMin) / (sectionMax - sectionMin)) * 220;
+  const sectionWidth = Math.max(260, tw - 40);
+  const sectionPlotWidth = sectionWidth - 68;
+  const [sectionPage, setSectionPage] = useState(0);
+  const actualSectionPage = Math.max(
+    0,
+    Math.min(sectionPage, Math.ceil(cross.length / 40) - 1),
+  );
   return (
     <section id="analysis" class="analysis">
       <h2>Read the observations</h2>
@@ -441,40 +468,52 @@ function AnalysisView({
       </div>
       {section && (
         <div class="depth-section">
-          <h3>Tonga depth section</h3>
+          <h3>Depth section</h3>
           <p>
-            170°E to 170°W at 22°S · great-circle transect · 400 km total
-            corridor · {cross.length} observations. Depth increases downward.
-            Horizontal distance {Math.round(distance(start, end))} km; vertical
-            scale −20 to 750 km. Vertical exaggeration{" "}
-            {((0.3 * distance(start, end)) / 720).toFixed(2)}× (relative to
-            horizontal distance).
+            {start.join(", ")} to {end.join(", ")} (longitude, latitude) ·
+            great-circle transect · {width} km total corridor · {cross.length}{" "}
+            observations. Depth increases downward. Horizontal distance{" "}
+            {Math.round(distance(start, end))} km; vertical scale {sectionMin}{" "}
+            to {sectionMax} km. Vertical exaggeration{" "}
+            {(
+              (220 * distance(start, end)) /
+              (sectionPlotWidth * (sectionMax - sectionMin))
+            ).toFixed(2)}
+            × (relative to horizontal distance).
           </p>
           <svg
-            viewBox="0 0 800 300"
+            width={sectionWidth}
+            height="300"
+            viewBox={`0 0 ${sectionWidth} 300`}
             role="img"
-            aria-label="Tonga depth section; depth positive downward"
+            aria-label="Custom depth section; depth positive downward"
           >
-            <line x1="50" x2="770" y1="30" y2="30" stroke={token("--ink")} />
-            {[0, 200, 400, 600].map((d) => (
+            <line
+              x1="50"
+              x2={sectionWidth - 18}
+              y1="30"
+              y2="30"
+              stroke={token("--ink")}
+            />
+            {ticks(sectionMin, sectionMax, 4).map((d) => (
               <g key={d}>
                 <line
                   x1="50"
-                  x2="770"
-                  y1={30 + d * 0.3}
-                  y2={30 + d * 0.3}
+                  x2={sectionWidth - 18}
+                  y1={sectionY(d)}
+                  y2={sectionY(d)}
                   stroke={token("--chart-grid")}
                 />
-                <text x="3" y={35 + d * 0.3} font-size="12">
-                  {d} km
+                <text x="3" y={sectionY(d) + 5} font-size="12">
+                  {Math.round(d)} km
                 </text>
               </g>
             ))}
             {cross.map(({ e, along }) => (
               <circle
                 key={e.id}
-                cx={50 + (along / distance(start, end)) * 720}
-                cy={30 + e.geometry.coordinates[2]! * 0.3}
+                cx={50 + (along / distance(start, end)) * sectionPlotWidth}
+                cy={sectionY(e.geometry.coordinates[2]!)}
                 r={selected === e.id ? 8 : 5}
                 fill={color(e.geometry.coordinates[2])}
                 stroke={
@@ -487,19 +526,54 @@ function AnalysisView({
                 </title>
               </circle>
             ))}
-            <text x="50" y="285">
-              0 km — Along-transect distance →{" "}
-              {Math.round(distance(start, end))} km
+            <text x="50" y="270" font-size="12">
+              0
+            </text>
+            <text
+              x={sectionWidth - 18}
+              y="270"
+              font-size="12"
+              text-anchor="end"
+            >
+              {Math.round(distance(start, end))}
+            </text>
+            <text
+              x={(sectionWidth + 32) / 2}
+              y="293"
+              font-size="12"
+              text-anchor="middle"
+            >
+              Along-transect distance (km)
             </text>
           </svg>
           <details>
             <summary>Section events — keyboard selection</summary>
-            {cross.map(({ e, along }) => (
-              <button key={e.id} onClick={() => select(e)}>
-                {e.properties.place} · {along.toFixed(0)} km along · depth{" "}
-                {e.geometry.coordinates[2]} km
+            {cross
+              .slice(actualSectionPage * 40, actualSectionPage * 40 + 40)
+              .map(({ e, along }) => (
+                <button key={e.id} onClick={() => select(e)}>
+                  {e.properties.place} · {along.toFixed(0)} km along · depth{" "}
+                  {e.geometry.coordinates[2]} km
+                </button>
+              ))}
+            <div class="button-row">
+              <button
+                disabled={!actualSectionPage}
+                onClick={() => setSectionPage(actualSectionPage - 1)}
+              >
+                Previous section events
               </button>
-            ))}
+              <span>
+                Page {actualSectionPage + 1} of{" "}
+                {Math.max(1, Math.ceil(cross.length / 40))}
+              </span>
+              <button
+                disabled={(actualSectionPage + 1) * 40 >= cross.length}
+                onClick={() => setSectionPage(actualSectionPage + 1)}
+              >
+                Next section events
+              </button>
+            </div>
           </details>
         </div>
       )}

@@ -6,18 +6,35 @@ import {
   useMemo,
   useLayoutEffect,
 } from "preact/hooks";
-import { Globe, type Camera } from "./Globe";
+import type { Camera } from "./Globe";
 import { Analysis } from "./Analysis";
 import { EventTable } from "./EventTable";
 import { SelectedEvent } from "./SelectedEvent";
 import { Replay } from "./Replay";
 import { ActivityAreas } from "./ActivityAreas";
 import { EarthPanel } from "./EarthPanel";
+import { Investigations } from "./Investigations";
+import { TransectEditor } from "./TransectEditor";
 import { useStable } from "./hooks";
+import { useDataset } from "./useDataset";
+import {
+  clampPage,
+  defaultSection,
+  errorMessage,
+  freshDetail,
+  parseDetail,
+  record,
+  parseSnapshot,
+  parseView,
+  type Detail,
+  type Mode,
+  type Query,
+  type Section,
+  type View,
+} from "./data";
 import { sources, glossary, lessons } from "./content";
 import {
   areaGroups,
-  color,
   csvCell,
   defaults,
   distance,
@@ -32,21 +49,8 @@ import {
 import "./style.css";
 const repository = "https://github.com/bruce-hoppe_uoft/earthquake-observatory";
 type SortKey = "mag" | "place" | "depth" | "time" | "status";
-const fmt = (v: number | null | undefined, digits = 1) =>
-  v == null ? "Unavailable" : v.toFixed(digits);
 const utc = (t: number) =>
   new Date(t).toISOString().replace("T", " ").replace(".000Z", " UTC");
-const safeURL = (s: string) => {
-  try {
-    const u = new URL(s);
-    return u.protocol === "https:" &&
-      (u.hostname === "earthquake.usgs.gov" || u.hostname === "www.usgs.gov")
-      ? u.href
-      : "";
-  } catch {
-    return "";
-  }
-};
 const storedAuto = () => {
   try {
     return (
@@ -58,11 +62,7 @@ const storedAuto = () => {
   }
 };
 function App() {
-  const [dataset, setDataset] = useState<Dataset | null>(null),
-    [mode, setMode] = useState("day"),
-    [busy, setBusy] = useState(false),
-    [error, setError] = useState(""),
-    [message, setMessage] = useState(""),
+  const [message, setMessage] = useState(""),
     [filters, setFilters] = useState<Filters>({ ...defaults }),
     [camera, setCamera] = useState<Camera>({ lon: 150, lat: 15, zoom: 1 }),
     [flat, setFlat] = useState(false),
@@ -85,23 +85,58 @@ function App() {
     [start, setStart] = useState("2023-02-06"),
     [end, setEnd] = useState("2023-02-13"),
     [history, setHistory] = useState(false),
-    [detail, setDetail] = useState<any>(null),
+    [detail, setDetail] = useState<Detail | null>(null),
     [detailError, setDetailError] = useState(""),
     [detailBusy, setDetailBusy] = useState(false),
     [near, setNear] = useState(false),
     [nearRadius, setNearRadius] = useState(300),
     [nearHours, setNearHours] = useState(24),
     [zone, setZone] = useState("UTC"),
-    [version, setVersion] = useState("");
-  const abort = useRef<AbortController | null>(null),
-    selectionToken = useRef(0),
-    cache = useRef(new Map<string, any>()),
-    saved = useRef<any>(null),
+    [version, setVersion] = useState(""),
+    [transect, setTransect] = useState<Section>(defaultSection);
+  const selectionToken = useRef(0),
+    cache = useRef(
+      new Map<string, { detail: Detail; fetched: number; updated: number }>(),
+    ),
+    saved = useRef<{ dataset: Dataset | null; view: View } | null>(null),
     detailHeading = useRef<HTMLHeadingElement>(null),
     selectionOrigin = useRef<HTMLElement | null>(null),
-    request = useRef(0),
     initialized = useRef(false),
-    loadRef = useRef<any>(null);
+    loadRef = useRef<(mode: Mode, query?: Query) => Promise<Dataset | null>>();
+  const {
+    dataset,
+    query,
+    mode,
+    busy,
+    error,
+    setError,
+    progress,
+    load: retrieve,
+    cancel,
+    replace,
+    retry,
+    checkpoint,
+    isCurrent,
+  } = useDataset((next) => {
+    setCursor(Infinity);
+    setPage(0);
+    if (!selected) return;
+    const current = next.data.features.find(
+      (event) =>
+        event.id === selected.id ||
+        event.properties.ids.split(",").includes(selected.id),
+    );
+    if (current) {
+      if (
+        current.id !== selected.id ||
+        current.properties.updated !== selected.properties.updated
+      ) {
+        setMessage("The selected event has been revised by USGS.");
+        void getDetail(current);
+      }
+      setSelected(current);
+    }
+  });
   const modalState = useRef(textPage);
   modalState.current = textPage;
   useLayoutEffect(() => {
@@ -117,53 +152,13 @@ function App() {
     setAuto(false);
     setPlaying(false);
   };
-  const change = (key: keyof Filters, value: any) => {
+  const change = (key: keyof Filters, value: unknown) => {
     setFilters((f) => ({ ...f, [key]: value }));
     setPage(0);
   };
-  async function load(next: string, url?: string) {
-    abort.current?.abort();
-    const controller = new AbortController();
-    abort.current = controller;
-    const ticket = ++request.current;
-    setBusy(true);
-    setError("");
+  async function load(next: Mode, historical?: Query) {
     setPlaying(false);
-    try {
-      const response = await fetch(
-        url || (next === "demo" ? "/api/demo" : "/api/recent?period=" + next),
-        { signal: controller.signal },
-      );
-      const d = await response.json();
-      if (!response.ok) throw Error(d.error || "Data retrieval failed");
-      if (ticket !== request.current) return;
-      setDataset(d);
-      setMode(next);
-      setCursor(Infinity);
-      setPage(0);
-      setSelected((prev) => {
-        if (!prev) return prev;
-        const current = d.data.features.find(
-          (e: Event) =>
-            e.id === prev.id || e.properties.ids?.split(",").includes(prev.id),
-        );
-        if (current && current.id !== prev.id)
-          setMessage(
-            `USGS now identifies the selected event as ${current.id} (previously ${prev.id}).`,
-          );
-        if (
-          current &&
-          current.id === prev.id &&
-          current.properties.updated !== prev.properties.updated
-        )
-          setMessage("The selected event has been revised by USGS.");
-        return current || prev;
-      });
-    } catch (e: any) {
-      if (e.name !== "AbortError") setError(e.message);
-    } finally {
-      if (ticket === request.current) setBusy(false);
-    }
+    return retrieve(next, historical);
   }
   loadRef.current = load;
   useEffect(() => {
@@ -171,69 +166,28 @@ function App() {
     initialized.current = true;
     const q = new URLSearchParams(location.search);
     try {
-      const state = JSON.parse(q.get("view") || "null");
-      if (state) {
-        if (
-          ["day", "week", "hour", "month", "demo", "history"].includes(
-            state.mode,
-          )
-        ) {
-          if (state.filters && typeof state.filters.text === "string") {
-            const f = { ...defaults, ...state.filters };
-            for (const key of ["min", "max", "depthMin", "depthMax"])
-              if (f[key] !== "" && !Number.isFinite(+f[key])) f[key] = "";
-            if (
-              f.region &&
-              ![
-                f.region.west,
-                f.region.east,
-                f.region.north,
-                f.region.south,
-              ].every(Number.isFinite)
-            )
-              f.region = null;
-            setFilters(f);
-          }
-          if (
-            state.camera &&
-            Number.isFinite(state.camera.lon) &&
-            Number.isFinite(state.camera.lat)
-          )
-            setCamera({
-              lon: Math.max(-180, Math.min(180, state.camera.lon)),
-              lat: Math.max(-85, Math.min(85, state.camera.lat)),
-              zoom: Math.max(0.65, Math.min(2.5, state.camera.zoom || 1)),
-            });
-          setFlat(!!state.flat);
-          setStart(state.start || start);
-          setEnd(state.end || end);
-          load(
-            state.mode,
-            state.mode === "history"
-              ? `/api/history?start=${encodeURIComponent(new Date(state.start).toISOString())}&end=${encodeURIComponent(new Date(state.end).toISOString())}&min=${encodeURIComponent(state.filters?.min || "-2")}`
-              : undefined,
-          ).then(() => {
-            if (state.selected) selectionToken.current = -1;
-            if (Number.isFinite(state.cursor)) setCursor(state.cursor);
-            if (state.zone) {
-              try {
-                new Intl.DateTimeFormat(undefined, { timeZone: state.zone });
-                setZone(state.zone);
-              } catch {}
-            }
-            setPlates(!!state.plates);
-            setSection(!!state.section);
-          });
-          return;
-        }
+      const raw: unknown = JSON.parse(q.get("view") || "null");
+      if (raw) {
+        const state = parseView(raw);
+        if (state.mode === "snapshot")
+          throw Error("Snapshot links require the saved file");
+        load(state.mode, state.query).then((next) => {
+          if (next) restoreView(state, next);
+        });
+        return;
       }
     } catch {
       setMessage("The shared view was invalid; showing defaults.");
     }
+    const initial = checkpoint();
     fetch("/api/config")
       .then((r) => r.json())
-      .then((c) => load(c.demo ? "demo" : "day"))
-      .catch(() => load("demo"));
+      .then((c) => {
+        if (isCurrent(initial)) return load(c.demo ? "demo" : "day");
+      })
+      .catch(() => {
+        if (isCurrent(initial)) return load("demo");
+      });
   }, []);
   useEffect(() => {
     fetch("/api/health")
@@ -251,20 +205,10 @@ function App() {
         lesson < 0 &&
         ["hour", "day", "week", "month"].includes(mode)
       )
-        loadRef.current(mode);
+        loadRef.current?.(mode);
     }, 60000);
     return () => clearInterval(id);
   }, [mode, busy, playing, selected, lesson]);
-  useEffect(() => {
-    if (dataset && selectionToken.current === -1) {
-      const state = JSON.parse(
-        new URLSearchParams(location.search).get("view") || "{}",
-      );
-      const e = dataset.data.features.find((e) => e.id === state.selected);
-      selectionToken.current = 0;
-      if (e) choose(e);
-    }
-  }, [dataset]);
   const all = useMemo(() => {
     const latest = new Map<string, Event>();
     for (const e of dataset?.data.features || []) {
@@ -288,6 +232,10 @@ function App() {
       );
     return result;
   }, [all, filters, cursor, near, selected, nearRadius, nearHours]);
+  useEffect(
+    () => setPage((previous) => clampPage(previous, filtered.length)),
+    [filtered.length],
+  );
   const ordered = useMemo(() => {
     const direction = descending ? -1 : 1;
     const value = (e: Event) =>
@@ -390,7 +338,7 @@ function App() {
       lat: selected.geometry.coordinates[1],
     });
   });
-  const stableChange = useStable((key: keyof Filters, value: any) =>
+  const stableChange = useStable((key: keyof Filters, value: unknown) =>
     change(key, value),
   );
   const stableFocusRegion = useStable((r: Region) => focusRegion(r));
@@ -398,44 +346,22 @@ function App() {
   const stableDisplayTime = useStable((t: number) => displayTime(t));
   const stableExport = useStable((kind: string) => exportData(kind));
   const importSnapshot = useStable(async (file: File) => {
+    const ticket = cancel();
     try {
-      if (file.size > 40 * 1024 * 1024) throw Error("Snapshot exceeds 40 MiB");
-      const d = JSON.parse(await file.text());
-      if (
-        d.type !== "FeatureCollection" ||
-        !Array.isArray(d.features) ||
-        d.features.length > 50000 ||
-        !d.features.every(
-          (e: any) =>
-            typeof e.id === "string" &&
-            e.geometry?.type === "Point" &&
-            e.geometry.coordinates?.length === 3 &&
-            e.geometry.coordinates.slice(0, 2).every(Number.isFinite) &&
-            Math.abs(e.geometry.coordinates[0]) <= 180 &&
-            Math.abs(e.geometry.coordinates[1]) <= 90 &&
-            Number.isFinite(e.properties?.time) &&
-            typeof e.properties?.place === "string",
-        )
-      )
-        throw Error("Invalid snapshot");
+      const next = await parseSnapshot(file);
+      if (!isCurrent(ticket)) return;
       pause();
-      setDataset({
-        id: d.metadata?.dataset || "imported",
-        query: d.metadata?.query || "Imported snapshot",
-        fetched: d.metadata?.retrieved || new Date().toISOString(),
-        complete: !!d.metadata?.complete,
-        stale: false,
-        data: d,
-      });
-      setMode("history");
+      replace(next, { mode: "snapshot" });
       setFilters({ ...defaults });
       setCursor(Infinity);
-      setSelected(null);
+      closeSelection();
+      setPage(0);
+      setHistory(false);
       setMessage(
         "Snapshot reopened locally. No upstream retrieval was needed.",
       );
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err) {
+      if (isCurrent(ticket)) setError(errorMessage(err));
     }
   });
   function closeSelection() {
@@ -450,20 +376,32 @@ function App() {
     setDetail(null);
     setDetailError("");
     setDetailBusy(false);
-    if (cache.current.has(e.id)) {
-      setDetail(cache.current.get(e.id));
+    const cached = cache.current.get(e.id);
+    if (freshDetail(cached, e.properties.updated)) {
+      setDetail(cached.detail);
       return;
     }
     setDetailBusy(true);
     try {
       const r = await fetch("/api/detail/" + encodeURIComponent(e.id));
-      const d = await r.json();
-      if (!r.ok) throw Error(d.error);
-      cache.current.set(e.id, d);
+      const raw: unknown = await r.json();
+      if (!r.ok)
+        throw Error(
+          record(raw) && typeof raw.error === "string"
+            ? raw.error
+            : "Event details unavailable",
+        );
+      const d = parseDetail(raw, e.id);
+      if (cache.current.size >= 32)
+        cache.current.delete(cache.current.keys().next().value!);
+      cache.current.set(e.id, {
+        detail: d,
+        fetched: Date.now(),
+        updated: e.properties.updated,
+      });
       if (token === selectionToken.current) setDetail(d);
-    } catch (err: any) {
-      if (token === selectionToken.current)
-        setDetailError(err.message || "Additional observations unavailable");
+    } catch (err) {
+      if (token === selectionToken.current) setDetailError(errorMessage(err));
     } finally {
       if (token === selectionToken.current) setDetailBusy(false);
     }
@@ -524,23 +462,73 @@ function App() {
     const next = !auto;
     setAuto(next);
     setAutoWanted(next);
-    localStorage.setItem("auto", String(next));
+    try {
+      localStorage.setItem("auto", String(next));
+    } catch {}
     if (next) setPlaying(false);
   }
-  async function share() {
-    const value = {
+  function currentView(): View {
+    return {
       mode,
+      query,
       filters,
       camera,
       flat,
-      start,
-      end,
       selected: selected?.id,
       cursor: Number.isFinite(cursor) ? cursor : null,
       zone,
       plates,
       section,
+      transect,
+      near: near ? { radius: nearRadius, hours: nearHours } : null,
     };
+  }
+  function restoreView(state: View, next: Dataset | null) {
+    pause();
+    closeSelection();
+    setFilters(state.filters);
+    setCamera(state.camera);
+    setFlat(state.flat);
+    setPlates(state.plates);
+    setSection(state.section);
+    setTransect(state.transect);
+    setCursor(state.cursor ?? Infinity);
+    setZone(state.zone);
+    setPage(0);
+    setHistory(false);
+    if (state.query.start) setStart(state.query.start.slice(0, 10));
+    if (state.query.end) setEnd(state.query.end.slice(0, 10));
+    const event = next?.data.features.find(
+      (event) => event.id === state.selected,
+    );
+    if (event) {
+      setSelected(event);
+      if (state.near) {
+        setNear(true);
+        setNearRadius(state.near.radius);
+        setNearHours(state.near.hours);
+      }
+    }
+  }
+  const stableView = useStable(() => currentView());
+  const openInvestigation = useStable((next: Dataset, state: View) => {
+    replace(next, state.query);
+    restoreView(state, next);
+    setMessage("Pinned or cached snapshot reopened locally.");
+  });
+  const runInvestigation = useStable((requested: Query, state: View) => {
+    void load(requested.mode, requested).then((next) => {
+      if (next) restoreView(state, next);
+    });
+  });
+  async function share() {
+    if (mode === "snapshot") {
+      setMessage(
+        "This snapshot is local. Export its file to share the observations.",
+      );
+      return;
+    }
+    const value = currentView();
     const u = new URL(location.href);
     u.search = "";
     u.searchParams.set("view", JSON.stringify(value));
@@ -578,6 +566,7 @@ function App() {
         ? { event: selected?.id, radiusKm: nearRadius, hours: nearHours }
         : null,
       timeZone: zone,
+      transect: section ? transect : null,
       sha256: hash,
       fieldDefinitions: {
         coordinates: "longitude degrees, latitude degrees, source depth km",
@@ -658,23 +647,14 @@ function App() {
   }
   async function startLesson(i: number) {
     const session = ++lessonSession.current;
-    if (lesson < 0)
-      saved.current = {
-        dataset,
-        mode,
-        filters,
-        camera,
-        selected,
-        cursor,
-        plates,
-        flat,
-      };
+    if (lesson < 0) saved.current = { dataset, view: currentView() };
     pause();
     setLesson(i);
     setStep(0);
     setSelected(null);
     setFilters({ ...defaults });
     setSection(i === 1);
+    if (i === 1) setTransect(defaultSection);
     await load("demo");
     if (session !== lessonSession.current) return;
     if (i === 1) focusRegion(regions[3]);
@@ -684,24 +664,15 @@ function App() {
   }
   function returnExplore() {
     lessonSession.current++;
-    abort.current?.abort();
-    request.current++;
-    setBusy(false);
+    cancel();
     pause();
     if (saved.current) {
       const s = saved.current;
-      setDataset(s.dataset);
-      setMode(s.mode);
-      setFilters(s.filters);
-      setCamera(s.camera);
-      setSelected(s.selected);
-      setCursor(s.cursor);
-      setPlates(s.plates);
-      setFlat(s.flat);
+      replace(s.dataset, s.view.query, s.view.mode === "snapshot");
+      restoreView(s.view, s.dataset);
     }
     setLesson(-1);
     setLearn(false);
-    setSection(false);
   }
   const displayTime = (t: number) =>
     zone === "UTC"
@@ -748,9 +719,11 @@ function App() {
           <span class="status">
             {mode === "demo"
               ? "Historical demonstration"
-              : mode === "history"
-                ? "Historical catalog"
-                : "USGS recent observations"}
+              : mode === "snapshot"
+                ? "Local snapshot"
+                : mode === "history"
+                  ? "Historical catalog"
+                  : "USGS recent observations"}
           </span>
         </header>
         <div class="toolbar">
@@ -760,7 +733,7 @@ function App() {
               value={mode}
               disabled={busy || lesson >= 0}
               onChange={(e) => {
-                const v = e.currentTarget.value;
+                const v = e.currentTarget.value as Mode;
                 if (v === "history") setHistory(true);
                 else {
                   setHistory(false);
@@ -774,6 +747,9 @@ function App() {
               <option value="month">Past 30 days</option>
               <option value="history">Custom history…</option>
               <option value="demo">Offline historical demo</option>
+              {mode === "snapshot" && (
+                <option value="snapshot">Local snapshot</option>
+              )}
             </select>
           </label>
           <div class="range-field" role="group" aria-label="Magnitude range">
@@ -805,7 +781,9 @@ function App() {
           </div>
           <button
             onClick={() => load(mode)}
-            disabled={busy || mode === "history" || lesson >= 0}
+            disabled={
+              busy || mode === "history" || mode === "snapshot" || lesson >= 0
+            }
           >
             {busy ? "Retrieving…" : "Refresh data"}
           </button>
@@ -817,10 +795,12 @@ function App() {
             class="history"
             onSubmit={(e) => {
               e.preventDefault();
-              load(
-                "history",
-                `/api/history?start=${encodeURIComponent(new Date(start + "T00:00:00Z").toISOString())}&end=${encodeURIComponent(new Date(end + "T00:00:00Z").toISOString())}&min=${filters.min || "-2"}`,
-              );
+              load("history", {
+                mode: "history",
+                start,
+                end,
+                min: filters.min || "-2",
+              });
             }}
           >
             <label>
@@ -855,8 +835,7 @@ function App() {
               : "Loading USGS observations…"}{" "}
             <button
               onClick={() => {
-                abort.current?.abort();
-                setBusy(false);
+                cancel();
                 setMessage("Retrieval cancelled.");
               }}
             >
@@ -866,10 +845,28 @@ function App() {
         )}
         {error && (
           <div class="notice error" role="alert">
-            {error}. <button onClick={() => load(mode)}>Retry</button>
+            {error}.{" "}
+            <button
+              onClick={() => {
+                setPlaying(false);
+                void retry();
+              }}
+            >
+              Retry
+            </button>
             <button onClick={() => load("demo")}>
               Open offline historical demo
             </button>
+          </div>
+        )}
+        {progress && (
+          <div class="notice retrieval-progress" role="status">
+            Historical retrieval: {progress.state} · {progress.requests}{" "}
+            upstream requests · {progress.partitions} completed partitions ·{" "}
+            {progress.events} observations
+            {progress.state === "running" && (
+              <progress aria-label="Historical retrieval in progress" />
+            )}
           </div>
         )}
         {message && (
@@ -880,9 +877,11 @@ function App() {
         )}
         {dataset && (
           <div class={"freshness " + (dataset.stale ? "stale" : "")}>
-            {dataset.stale
-              ? "Stale cached observations — refresh failed. "
-              : ""}
+            {mode === "snapshot"
+              ? "Saved observations; not revalidated. "
+              : dataset.stale
+                ? "Stale cached observations — refresh failed. "
+                : ""}
             {mode === "demo"
               ? "Bundled historical observations · 6–12 February 2023 · M4+ · not live. "
               : ""}
@@ -975,6 +974,7 @@ function App() {
             setPlates={setPlates}
             region={filters.region}
             section={section}
+            transect={transect}
             auto={auto}
             autoWanted={autoWanted}
             toggleAuto={stableToggleAuto}
@@ -998,6 +998,7 @@ function App() {
                 getDetail={stableGetDetail}
                 products={products}
                 detailLoaded={!!detail}
+                detail={detail}
                 fetched={dataset?.fetched || ""}
                 centreOnSelection={centreOnSelection}
                 share={stableShare}
@@ -1085,25 +1086,43 @@ function App() {
           selectedId={selected?.id || ""}
           choose={stableChoose}
           displayTime={stableDisplayTime}
-          page={page}
+          page={clampPage(page, filtered.length)}
           setPage={setPage}
           hasDataset={!!dataset}
           exportData={stableExport}
           importSnapshot={importSnapshot}
+        />
+        <Investigations
+          dataset={dataset}
+          getView={stableView}
+          disabled={busy || lesson >= 0}
+          onOpen={openInvestigation}
+          onRun={runInvestigation}
         />
         <Analysis
           events={filtered}
           selected={selected?.id || ""}
           select={stableChoose}
           section={section}
+          sectionConfig={transect}
           query={dataset?.query || ""}
         />
         <div class="chart-actions">
           <button onClick={chartExport}>Export timeline SVG</button>
           <button onClick={() => setSection(!section)}>
-            {section ? "Hide" : "Show"} Tonga depth section
+            {section ? "Hide" : "Show"} depth section
           </button>
         </div>
+        {section && (
+          <TransectEditor
+            value={transect}
+            selected={selected}
+            onApply={(value) => {
+              pause();
+              setTransect(value);
+            }}
+          />
+        )}
         <footer>
           <a href={repository} target="_blank" rel="noreferrer">
             Built by Bruce Hoppe · Source on GitHub

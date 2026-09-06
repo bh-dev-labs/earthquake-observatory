@@ -13,7 +13,6 @@ import { SelectedEvent } from "./SelectedEvent";
 import { Replay } from "./Replay";
 import { ActivityAreas } from "./ActivityAreas";
 import { EarthPanel } from "./EarthPanel";
-import { Investigations } from "./Investigations";
 import { TransectEditor } from "./TransectEditor";
 import { useStable } from "./hooks";
 import { useDataset } from "./useDataset";
@@ -510,17 +509,6 @@ function App() {
       }
     }
   }
-  const stableView = useStable(() => currentView());
-  const openInvestigation = useStable((next: Dataset, state: View) => {
-    replace(next, state.query);
-    restoreView(state, next);
-    setMessage("Pinned or cached snapshot reopened locally.");
-  });
-  const runInvestigation = useStable((requested: Query, state: View) => {
-    void load(requested.mode, requested).then((next) => {
-      if (next) restoreView(state, next);
-    });
-  });
   async function share() {
     if (mode === "snapshot") {
       setMessage(
@@ -1091,13 +1079,6 @@ function App() {
           hasDataset={!!dataset}
           exportData={stableExport}
           importSnapshot={importSnapshot}
-        />
-        <Investigations
-          dataset={dataset}
-          getView={stableView}
-          disabled={busy || lesson >= 0}
-          onOpen={openInvestigation}
-          onRun={runInvestigation}
         />
         <Analysis
           events={filtered}

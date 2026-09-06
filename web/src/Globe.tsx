@@ -70,16 +70,25 @@ export function Globe(p: Props) {
       setTheme((n) => n + 1);
     };
     scheme.addEventListener("change", repaint);
-    const ro = new ResizeObserver((es) => {
-      const r = es[0].contentRect;
-      setSize([
-        r.width,
-        Math.min(820, Math.max(360, r.width * 0.7, innerHeight * 0.62)),
-      ]);
-    });
+    const resize = () => {
+      const width = ref.current?.parentElement?.clientWidth;
+      if (!width) return;
+      const height = Math.round(
+        Math.min(640, innerHeight * 0.55, Math.max(240, width * 0.7)),
+      );
+      setSize((previous) =>
+        previous[0] === width && previous[1] === height
+          ? previous
+          : [width, height],
+      );
+    };
+    const ro = new ResizeObserver(resize);
     if (ref.current) ro.observe(ref.current.parentElement!);
+    window.addEventListener("resize", resize);
+    resize();
     return () => {
       ro.disconnect();
+      window.removeEventListener("resize", resize);
       scheme.removeEventListener("change", repaint);
     };
   }, []);
@@ -123,7 +132,7 @@ export function Globe(p: Props) {
     const proj = p.flat
       ? geoEquirectangular()
           .rotate([-p.camera.lon, 0, 0])
-          .scale((w / 6.5) * p.camera.zoom)
+          .scale(Math.min(w / 6.5, h / 3.25) * p.camera.zoom)
           .translate([w / 2, h / 2])
       : geoOrthographic()
           .rotate([-p.camera.lon, -p.camera.lat, 0])

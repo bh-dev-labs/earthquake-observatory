@@ -317,16 +317,18 @@ a {
   text-underline-offset: 3px;
 }
 main {
-  max-width: min(1840px, 96vw);
-  margin: 24px auto;
+  width: calc(100% - 24px);
+  max-width: 1840px;
+  margin: 12px auto;
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 12px;
   overflow: hidden;
 }
 header {
-  padding: 26px 30px;
+  padding: 16px 24px;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 20px;
@@ -504,8 +506,11 @@ label {
   line-height: 1.6;
 }
 .details {
-  padding: 28px 30px;
+  padding: 20px 24px;
   min-width: 0;
+  max-height: calc(55dvh + 220px);
+  overflow: auto;
+  overflow-wrap: anywhere;
 }
 .detail-top {
   display: flex;
@@ -901,12 +906,6 @@ footer p {
   clip: rect(0, 0, 0, 0);
 }
 @media (min-width: 1500px) {
-  :root {
-    font-size: 17px;
-  }
-  main {
-    margin: 35px auto;
-  }
   header,
   .toolbar,
   .replay,
@@ -954,8 +953,23 @@ footer p {
     grid-template-columns: 1fr 1fr;
   }
 }
+@media (max-width: 960px) {
+  .observatory {
+    grid-template-columns: 1fr;
+  }
+  .earth-panel {
+    border-right: 0;
+  }
+  .details {
+    border-top: 1px solid var(--line);
+  }
+  .details:has(.eyebrow) {
+    display: none;
+  }
+}
 @media (max-width: 720px) {
   main {
+    width: 100%;
     margin: 0;
     border: 0;
     border-radius: 0;

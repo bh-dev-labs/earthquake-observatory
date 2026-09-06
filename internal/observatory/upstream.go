@@ -222,7 +222,14 @@ func (s *Service) History(ctx context.Context, start, end time.Time, min float64
 	for _, e := range all {
 		c.Features = append(c.Features, e)
 	}
-	sort.Slice(c.Features, func(i, j int) bool { return c.Features[i].Properties.Time < c.Features[j].Properties.Time })
+	// Map iteration is unordered; break timestamp ties so unchanged results
+	// keep the same serialized payload and content-addressed snapshot ID.
+	sort.Slice(c.Features, func(i, j int) bool {
+		if c.Features[i].Properties.Time == c.Features[j].Properties.Time {
+			return c.Features[i].ID < c.Features[j].ID
+		}
+		return c.Features[i].Properties.Time < c.Features[j].Properties.Time
+	})
 	raw, _ := json.Marshal(c)
 	return s.Store.Save(query, raw)
 }

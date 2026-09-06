@@ -1,7 +1,11 @@
 # Changelog
 
-## Unreleased
+## 0.1.0 package refresh (2026-09-06)
 
+- Merged PR #1: optional country labels, compact event sidebar and responsive layouts. Removed the Saved investigations panel from the interface; database records remain intact. The investigation/cache additions below describe backend capabilities retained from earlier work.
+
+- Stabilized historical snapshot IDs when multiple events share a timestamp.
+- Prevented superseded responses from clearing the active historical progress poll.
 - Fixed shared-region validation and bounded drawing loops; malformed snapshots no longer reach rendering.
 - Extracted typed loading and committed queries. Imports invalidate pending work, Retry repeats failed queries, links ignore unsent edits, and pagination clamps when results shrink.
 - Normalize historical timestamps to UTC and reject submillisecond boundaries; added bounded progress and cancellation status.

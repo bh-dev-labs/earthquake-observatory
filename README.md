@@ -16,7 +16,7 @@ The app opens `http://127.0.0.1:8787`. Only the local computer can access the se
 
 ## Development
 
-The current source adds saved investigations, revision comparisons, cache controls, retrieval progress, source uncertainty and custom transects. Existing `release/` archives have not been rebuilt for these unreleased changes; build from source to use them.
+The current source includes optional country names, a compact event sidebar, responsive layouts, retrieval progress, source uncertainty and custom transects. The refreshed 0.1.0 ZIPs in `release/` include these changes. See [review and verification](docs/review-2026-09-06.md).
 
 Prerequisites: Go 1.26+ (tested with 1.27.1), Node 22.12+ (tested with 26.8.1), npm. Python 3 is used only to create ZIP archives. Pinned dependencies are in go.mod/go.sum and package-lock.json.
 
@@ -70,9 +70,7 @@ Drag to rotate, pinch to zoom, or focus the canvas before using the wheel. Butto
 
 ## Investigations and source details
 
-For a repeatable study, enter a name and notes under **Saved investigations**, then choose **Pin current snapshot**. This saves the full loaded dataset and its view separately from the rolling cache. **Save name & notes** changes annotations without changing observations. **Reopen pinned snapshot** restores it offline; **Run saved query** retrieves the original query without replacing the pinned copy. Imported snapshots without a query cannot be rerun.
-
-Choose **Compare revisions** to compare the selected investigation with the current dataset. Inspect changed, added and absent records and export a comparison CSV. Absence is not evidence of catalog deletion, especially when source queries differ. Expand **Local cache** to inspect, reopen or remove cached datasets. Clearing the cache retains pinned investigations. Database backups include pins and notes.
+For a repeatable study, export a GeoJSON snapshot and reopen the file later. Use **Copy view link** to retain query and view settings, including country names and transects. The Saved investigations and Local cache panels have been removed from the interface; existing database records are retained.
 
 Historical searches report upstream requests, completed partitions and observations. Cancellation preserves the prior dataset; Retry repeats the failed dates and magnitude threshold. Copied history links use the successfully loaded query, not unsubmitted edits. Selected-event **Source uncertainty & quality** shows available source error estimates and station-quality fields. Missing values remain unavailable, not zero; current-detail values are labelled because they may be newer than a snapshot.
 

@@ -42,7 +42,24 @@ const response = await fetch("http://127.0.0.1:8790/api/demo");
 const demo = await response.json();
 assert.equal(demo.data.features.length, 618);
 const home = await fetch("http://127.0.0.1:8790/");
-assert.ok((await home.text()).includes("Earthquake Observatory"));
+const html = await home.text();
+assert.equal(
+  html,
+  await fs.readFile("cmd/observatory/dist/index.html", "utf8"),
+);
+for (const [, asset] of html.matchAll(/(?:src|href)="(\/assets\/[^\"]+)"/g)) {
+  const response = await fetch("http://127.0.0.1:8790" + asset);
+  assert.equal(response.status, 200);
+  assert.deepEqual(
+    Buffer.from(await response.arrayBuffer()),
+    await fs.readFile("cmd/observatory/dist" + asset),
+  );
+}
+const health = await (await fetch("http://127.0.0.1:8790/api/health")).json();
+assert.equal(
+  health.version,
+  JSON.parse(await fs.readFile("package.json", "utf8")).version,
+);
 const ready = await (await fetch("http://127.0.0.1:8790/api/ready")).json();
 assert.equal(ready.ready, true);
 const attack = await fetch("http://127.0.0.1:8790/api/quit", {
@@ -79,7 +96,8 @@ const report = {
   checks: [
     "Fresh ZIP extraction",
     "Native executable start",
-    "Embedded production frontend",
+    "Embedded HTML and production assets match current build byte-for-byte",
+    "Runtime version matches package.json",
     "Offline 618-event dataset",
     "SQLite readiness",
     "Cross-origin quit rejected",

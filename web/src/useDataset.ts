@@ -104,6 +104,7 @@ export function useDataset(onLoaded: (dataset: Dataset) => void) {
       }
       const response = await fetch(url, { signal: current.signal });
       const body: unknown = await response.json().catch(() => null);
+      if (!gate.current.current(current.ticket)) return null;
       if (poll.current) clearInterval(poll.current);
       poll.current = null;
       if (finalProgress) await finalProgress();

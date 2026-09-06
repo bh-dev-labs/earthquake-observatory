@@ -1,10 +1,11 @@
 {
   "archive": "darwin-arm64",
-  "root": "/private/tmp/atlas-consumer-AbE2gK",
+  "root": "/private/tmp/atlas-consumer-l2ntv6",
   "checks": [
     "Fresh ZIP extraction",
     "Native executable start",
-    "Embedded production frontend",
+    "Embedded HTML and production assets match current build byte-for-byte",
+    "Runtime version matches package.json",
     "Offline 618-event dataset",
     "SQLite readiness",
     "Cross-origin quit rejected",
@@ -15,5 +16,5 @@
   ],
   "windowsRuntimeTested": false,
   "intelMacRuntimeTested": false,
-  "generated": "2026-09-06T12:51:51.435Z"
+  "generated": "2026-09-06T15:45:09.278Z"
 }

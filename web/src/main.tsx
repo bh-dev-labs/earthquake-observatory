@@ -26,6 +26,7 @@ import {
   parseSnapshot,
   parseView,
   type Detail,
+  type Level,
   type Mode,
   type Query,
   type Section,
@@ -85,6 +86,8 @@ function App() {
     [start, setStart] = useState("2023-02-06"),
     [end, setEnd] = useState("2023-02-13"),
     [history, setHistory] = useState(false),
+    [level, setLevel] = useState<Level>("all"),
+    [estimate, setEstimate] = useState(""),
     [detail, setDetail] = useState<Detail | null>(null),
     [detailError, setDetailError] = useState(""),
     [detailBusy, setDetailBusy] = useState(false),
@@ -155,12 +158,47 @@ function App() {
   const change = (key: keyof Filters, value: unknown) => {
     setFilters((f) => ({ ...f, [key]: value }));
     setPage(0);
+    // The historical estimate is bound to the magnitude it was computed for.
+    if (key === "min") setEstimate("");
   };
   async function load(next: Mode, historical?: Query) {
     setPlaying(false);
-    return retrieve(next, historical);
+    return retrieve(next, historical ?? { mode: next, level });
   }
   loadRef.current = load;
+  // Ask USGS how many events the interval holds before History spends its
+  // 64-request partition budget. Returns false only when the count itself says
+  // the retrieval cannot succeed.
+  async function withinBudget(from: string, to: string, min: string) {
+    setEstimate("Estimating…");
+    try {
+      const response = await fetch(
+        "/api/history/count?" +
+          new URLSearchParams({
+            start: new Date(from).toISOString(),
+            end: new Date(to).toISOString(),
+            min,
+          }),
+      );
+      const body: unknown = await response.json();
+      if (!response.ok || !record(body) || typeof body.count !== "number") {
+        setEstimate("");
+        return true;
+      }
+      const n = body.count;
+      setEstimate(`${n.toLocaleString()} events match this interval.`);
+      if (n > 50000) {
+        setEstimate(
+          `${n.toLocaleString()} events exceed the 50,000-event limit. Shorten the interval or raise the minimum magnitude.`,
+        );
+        return false;
+      }
+      return true;
+    } catch {
+      setEstimate("");
+      return true;
+    }
+  }
   useEffect(() => {
     if (initialized.current) return;
     initialized.current = true;
@@ -171,6 +209,7 @@ function App() {
         const state = parseView(raw);
         if (state.mode === "snapshot")
           throw Error("Snapshot links require the saved file");
+        setLevel(state.query.level || "all");
         load(state.mode, state.query).then((next) => {
           if (next) restoreView(state, next);
         });
@@ -743,6 +782,28 @@ function App() {
               )}
             </select>
           </label>
+          <label>
+            Detail{" "}
+            <select
+              value={level}
+              disabled={
+                busy ||
+                lesson >= 0 ||
+                !["hour", "day", "week", "month"].includes(mode)
+              }
+              onChange={(e) => {
+                const v = e.currentTarget.value as Level;
+                setLevel(v);
+                load(mode, { mode, level: v });
+              }}
+            >
+              <option value="all">All magnitudes</option>
+              <option value="1.0">M1.0+</option>
+              <option value="2.5">M2.5+</option>
+              <option value="4.5">M4.5+</option>
+              <option value="significant">Significant only</option>
+            </select>
+          </label>
           <div class="range-field" role="group" aria-label="Magnitude range">
             <span class="range-label">Magnitude</span>
             <label>
@@ -786,11 +847,9 @@ function App() {
             class="history"
             onSubmit={(e) => {
               e.preventDefault();
-              load("history", {
-                mode: "history",
-                start,
-                end,
-                min: filters.min || "-2",
+              const min = filters.min || "-2";
+              void withinBudget(start, end, min).then((ok) => {
+                if (ok) load("history", { mode: "history", start, end, min });
               });
             }}
           >
@@ -800,7 +859,10 @@ function App() {
                 type="date"
                 required
                 value={start}
-                onInput={(e) => setStart(e.currentTarget.value)}
+                onInput={(e) => {
+                  setStart(e.currentTarget.value);
+                  setEstimate("");
+                }}
               />
             </label>
             <label>
@@ -809,13 +871,17 @@ function App() {
                 type="date"
                 required
                 value={end}
-                onInput={(e) => setEnd(e.currentTarget.value)}
+                onInput={(e) => {
+                  setEnd(e.currentTarget.value);
+                  setEstimate("");
+                }}
               />
             </label>
             <button disabled={busy}>Retrieve history</button>
             <p>
               Up to 31 days, 50,000 events and 2 minutes. A failed or cancelled
               search preserves the previous dataset.
+              {estimate ? " " + estimate : ""}
             </p>
           </form>
         )}

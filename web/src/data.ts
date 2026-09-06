@@ -8,7 +8,17 @@ import {
 
 export type Mode =
   "hour" | "day" | "week" | "month" | "demo" | "history" | "snapshot";
-export type Query = { mode: Mode; start?: string; end?: string; min?: string };
+// USGS publishes each recent period at five magnitude thresholds; "all" is the
+// default and the largest. Ignored by the history, demo and snapshot modes.
+export const levels = ["all", "1.0", "2.5", "4.5", "significant"] as const;
+export type Level = (typeof levels)[number];
+export type Query = {
+  mode: Mode;
+  start?: string;
+  end?: string;
+  min?: string;
+  level?: Level;
+};
 export type Section = {
   start: [number, number];
   end: [number, number];
@@ -228,7 +238,10 @@ export function parseQuery(value: unknown): Query {
     )
   )
     throw Error("Invalid query mode");
-  if (value.mode !== "history") return { mode: value.mode as Mode };
+  const level = levels.includes(value.level as Level)
+    ? (value.level as Level)
+    : "all";
+  if (value.mode !== "history") return { mode: value.mode as Mode, level };
   if (typeof value.start !== "string" || typeof value.end !== "string")
     throw Error("Missing historical interval");
   const start = Date.parse(value.start),
@@ -265,7 +278,10 @@ export function queryURL(query: Query) {
         min: query.min!,
       })
     );
-  return "/api/recent?period=" + query.mode;
+  return (
+    "/api/recent?" +
+    new URLSearchParams({ period: query.mode, level: query.level || "all" })
+  );
 }
 
 export function parseView(value: unknown): View {

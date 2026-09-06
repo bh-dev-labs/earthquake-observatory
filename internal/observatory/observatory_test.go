@@ -87,11 +87,11 @@ func TestStaleRecoveryAndValidation(t *testing.T) {
 		n++
 		return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(string(fixture("1", "2", 3)))), Header: make(http.Header)}, nil
 	})
-	d, e := svc.Recent(context.Background(), "day")
+	d, e := svc.Recent(context.Background(), "day", "")
 	if e != nil {
 		t.Fatal(e)
 	}
-	svc.Recent(context.Background(), "day")
+	svc.Recent(context.Background(), "day", "")
 	if n != 1 {
 		t.Fatal("cache not shared")
 	}
@@ -99,15 +99,49 @@ func TestStaleRecoveryAndValidation(t *testing.T) {
 	svc.Client.Transport = transport(func(r *http.Request) (*http.Response, error) {
 		return &http.Response{StatusCode: 400, Body: io.NopCloser(strings.NewReader("bad")), Header: make(http.Header)}, nil
 	})
-	stale, e := svc.Recent(context.Background(), "day")
+	stale, e := svc.Recent(context.Background(), "day", "")
 	if e != nil || !stale.Stale || stale.ID != d.ID {
 		t.Fatal("stale data not preserved")
 	}
 	if _, e = svc.Fetch(context.Background(), "http://localhost/secret"); e == nil {
 		t.Fatal("proxy accepted")
 	}
-	if _, e = svc.Recent(context.Background(), "evil"); e == nil {
+	if _, e = svc.Recent(context.Background(), "evil", ""); e == nil {
 		t.Fatal("invalid period")
+	}
+	if _, e = svc.Recent(context.Background(), "day", "../../secret"); e == nil {
+		t.Fatal("invalid level")
+	}
+}
+func TestThresholdFeedAndCount(t *testing.T) {
+	s, _ := Open(filepath.Join(t.TempDir(), "db"))
+	defer s.DB.Close()
+	svc := NewService(s)
+	seen := ""
+	svc.Client.Transport = transport(func(r *http.Request) (*http.Response, error) {
+		seen = r.URL.String()
+		body := string(fixture("1", "2", 3))
+		if strings.Contains(r.URL.Path, "/count") {
+			body = `{"count":1234,"maxAllowed":20000}`
+		}
+		return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(body)), Header: make(http.Header)}, nil
+	})
+	if _, e := svc.Recent(context.Background(), "month", "4.5"); e != nil {
+		t.Fatal(e)
+	}
+	if seen != "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/4.5_month.geojson" {
+		t.Fatal("wrong threshold feed:", seen)
+	}
+	end := time.Now().UTC().Truncate(time.Millisecond)
+	n, e := svc.Count(context.Background(), end.Add(-24*time.Hour), end, 4)
+	if e != nil || n != 1234 {
+		t.Fatal("count not reported:", n, e)
+	}
+	if !strings.Contains(seen, "/fdsnws/event/1/count?") || !strings.Contains(seen, "minmagnitude=4") {
+		t.Fatal("wrong count query:", seen)
+	}
+	if _, e = svc.Count(context.Background(), end, end.Add(24*time.Hour), 4); e == nil {
+		t.Fatal("future interval accepted")
 	}
 }
 func TestHistoricalCancellationBudgetAndAtomicity(t *testing.T) {

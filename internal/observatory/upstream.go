@@ -128,13 +128,30 @@ func (s *Service) Fetch(ctx context.Context, u string) ([]byte, error) {
 	}
 	return nil, last
 }
-func (s *Service) Recent(ctx context.Context, period string) (Dataset, error) {
+
+// USGS publishes each summary period at five magnitude thresholds. "all" is
+// the default and by far the largest; the month feed shrinks from roughly 8 MiB
+// to a few hundred KiB at 4.5, which is the difference the globe view feels.
+func ValidLevel(level string) bool {
+	switch level {
+	case "all", "1.0", "2.5", "4.5", "significant":
+		return true
+	}
+	return false
+}
+func (s *Service) Recent(ctx context.Context, period, level string) (Dataset, error) {
 	if period != "hour" && period != "day" && period != "week" && period != "month" {
 		return Dataset{}, fmt.Errorf("period must be hour, day, week or month")
 	}
+	if level == "" {
+		level = "all"
+	}
+	if !ValidLevel(level) {
+		return Dataset{}, fmt.Errorf("level must be all, 1.0, 2.5, 4.5 or significant")
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	query := "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_" + period + ".geojson"
+	query := "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/" + level + "_" + period + ".geojson"
 	old, oldErr := s.Store.Latest(query)
 	t, _ := time.Parse(time.RFC3339Nano, old.Fetched)
 	if oldErr == nil && time.Since(t) < 60*time.Second {
@@ -155,6 +172,37 @@ func (s *Service) Recent(ctx context.Context, period string) (Dataset, error) {
 	}
 	return Dataset{}, err
 }
+
+// Shared by History and Count so the estimate always covers exactly the
+// interval the retrieval would accept.
+func checkInterval(start, end time.Time, min float64) error {
+	if end.Sub(start) < time.Millisecond || start.Nanosecond()%int(time.Millisecond) != 0 || end.Nanosecond()%int(time.Millisecond) != 0 || end.Sub(start) > 31*24*time.Hour || end.After(time.Now().Add(time.Minute)) || min < -2 || min > 10 || math.IsNaN(min) || math.IsInf(min, 0) {
+		return fmt.Errorf("use a past UTC interval of 1 millisecond to 31 days and magnitude -2 to 10")
+	}
+	return nil
+}
+
+// Count asks USGS how large a historical query is before History spends its
+// 64-request partition budget on it.
+func (s *Service) Count(ctx context.Context, start, end time.Time, min float64) (int, error) {
+	start, end = start.UTC(), end.UTC()
+	if err := checkInterval(start, end, min); err != nil {
+		return 0, err
+	}
+	q := url.Values{"format": {"geojson"}, "starttime": {start.Format("2006-01-02T15:04:05.000Z")}, "endtime": {end.Add(-time.Millisecond).Format("2006-01-02T15:04:05.000Z")}, "minmagnitude": {fmt.Sprint(min)}, "eventtype": {"earthquake"}}
+	raw, err := s.Fetch(ctx, "https://earthquake.usgs.gov/fdsnws/event/1/count?"+q.Encode())
+	if err != nil {
+		return 0, err
+	}
+	var v struct {
+		Count *int `json:"count"`
+	}
+	if err := json.Unmarshal(raw, &v); err != nil || v.Count == nil || *v.Count < 0 {
+		return 0, fmt.Errorf("invalid USGS count response")
+	}
+	return *v.Count, nil
+}
+
 func (s *Service) History(ctx context.Context, start, end time.Time, min float64) (Dataset, error) {
 	start, end = start.UTC(), end.UTC()
 	select {
@@ -163,8 +211,8 @@ func (s *Service) History(ctx context.Context, start, end time.Time, min float64
 	default:
 		return Dataset{}, fmt.Errorf("another historical search is running; try again shortly")
 	}
-	if end.Sub(start) < time.Millisecond || start.Nanosecond()%int(time.Millisecond) != 0 || end.Nanosecond()%int(time.Millisecond) != 0 || end.Sub(start) > 31*24*time.Hour || end.After(time.Now().Add(time.Minute)) || min < -2 || min > 10 || math.IsNaN(min) || math.IsInf(min, 0) {
-		return Dataset{}, fmt.Errorf("use a past UTC interval of 1 millisecond to 31 days and magnitude -2 to 10")
+	if err := checkInterval(start, end, min); err != nil {
+		return Dataset{}, err
 	}
 	query := fmt.Sprintf("USGS catalog [%s,%s) magnitude >= %g", start.Format(time.RFC3339Nano), end.Format(time.RFC3339Nano), min)
 	all := map[string]Feature{}

@@ -5,12 +5,13 @@ Checked 2026-09-06 UTC (2026-09-05 local America/Toronto). Original specificatio
 ## USGS GeoJSON summary feeds
 U.S. Geological Survey. [Original source](https://earthquake.usgs.gov/earthquakes/feed/v1.0/geojson.php).
 Recent observations; longitude, latitude, depth in km and UTC epoch milliseconds.
-Verification: 2026-09-06 UTC.
+Each of the four periods is published at five magnitude thresholds — `all`, `1.0`, `2.5`, `4.5` and `significant` — as `<threshold>_<period>.geojson`. All twenty are used by the Detail control.
+Verification: all twenty feeds returned HTTP 200 on 2026-09-06 UTC.
 
 ## USGS historical catalog
 U.S. Geological Survey. [Original source](https://earthquake.usgs.gov/fdsnws/event/1/).
-Historical intervals; at most 20,000 events per request; offsets start at 1.
-Verification: 2026-09-06 UTC.
+Historical intervals; at most 20,000 events per request; offsets start at 1. The sibling `count` method reports `{"count":N,"maxAllowed":20000}` for the same parameters and backs the pre-retrieval size estimate.
+Verification: 2026-09-06 UTC. A one-day M4+ interval reported count 250 and the retrieval returned 250 events.
 
 ## USGS event details
 U.S. Geological Survey. [Original source](https://earthquake.usgs.gov/earthquakes/feed/v1.0/geojson_detail.php).

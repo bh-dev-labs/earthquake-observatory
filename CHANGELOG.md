@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.0 (unreleased; next rebuild)
+
+- Added the USGS magnitude-threshold summary feeds. A Detail control selects `all`, `M1.0+`, `M2.5+`, `M4.5+` or significant-only for any recent period; the choice is carried in shared view links. The 30-day feed drops from roughly 8 MiB to a few hundred KiB at `M4.5+`.
+- Added a size estimate before a historical retrieval. `/api/history/count` reports how many events an interval holds using one upstream request, and the interface refuses a search whose estimate exceeds the 50,000-event budget rather than spending the 64-request partition budget to discover it.
+
 ## 0.1.0 package refresh (2026-09-06)
 
 - Merged PR #1: optional country labels, compact event sidebar and responsive layouts. Removed the Saved investigations panel from the interface; database records remain intact. The investigation/cache additions below describe backend capabilities retained from earlier work.

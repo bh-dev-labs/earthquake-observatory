@@ -162,7 +162,7 @@ try {
     finished();
   };
   await page.route("**/api/recent?*", delayed);
-  await page.locator(".toolbar select").selectOption("day");
+  await page.getByLabel("Period").selectOption("day");
   await intercepted;
   await upload({ ...demo, features: demo.features.slice(0, 3) });
   await count(3);
@@ -188,7 +188,7 @@ try {
     return route.fulfill({ json: envelope });
   };
   await page.route("**/api/history?*", history);
-  await page.locator(".toolbar select").selectOption("history");
+  await page.getByLabel("Period").selectOption("history");
   await page
     .getByRole("button", { name: "Retrieve history", exact: true })
     .click();

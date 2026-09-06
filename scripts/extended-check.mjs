@@ -93,7 +93,7 @@ await page.route("**/api/recent?*", (r) =>
     body: JSON.stringify({ error: "Injected upstream outage" }),
   }),
 );
-await page.locator(".toolbar select").first().selectOption("day");
+await page.getByLabel("Period").selectOption("day");
 await page.getByRole("alert").waitFor();
 assert.ok(await page.getByText("618 earthquakes", { exact: true }).isVisible());
 await page
@@ -101,7 +101,7 @@ await page
   .click();
 await page.getByText("618 earthquakes", { exact: true }).waitFor();
 checks.push("Initial live failure retains historical data; demo recovery");
-await page.locator(".toolbar select").first().selectOption("history");
+await page.getByLabel("Period").selectOption("history");
 await page
   .getByRole("button", { name: "Retrieve history", exact: true })
   .click();

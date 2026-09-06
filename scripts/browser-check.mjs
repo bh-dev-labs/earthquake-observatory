@@ -72,7 +72,7 @@ await page
   })
   .click();
 await page
-  .getByRole("heading", { name: "Tonga depth section", exact: true })
+  .getByRole("heading", { name: "Depth section", exact: true })
   .waitFor();
 await page.getByRole("button", { name: "Next step", exact: true }).click();
 await page.getByRole("button", { name: "Next step", exact: true }).click();

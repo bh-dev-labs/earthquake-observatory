@@ -91,7 +91,8 @@ func main() {
 	})
 	mux.HandleFunc("GET /api/config", func(w http.ResponseWriter, r *http.Request) { reply(w, map[string]bool{"demo": *demo}, nil) })
 	mux.HandleFunc("GET /api/recent", func(w http.ResponseWriter, r *http.Request) {
-		d, e := svc.Recent(r.Context(), r.URL.Query().Get("period"))
+		q := r.URL.Query()
+		d, e := svc.Recent(r.Context(), q.Get("period"), q.Get("level"))
 		reply(w, d, e)
 	})
 	mux.HandleFunc("GET /api/demo", func(w http.ResponseWriter, r *http.Request) {
@@ -122,6 +123,24 @@ func main() {
 			d, e = svc.History(ctx, a, b, m)
 		}
 		reply(w, d, e)
+	})
+	mux.HandleFunc("GET /api/history/count", func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		a, e1 := time.Parse(time.RFC3339Nano, q.Get("start"))
+		b, e2 := time.Parse(time.RFC3339Nano, q.Get("end"))
+		m, e3 := strconv.ParseFloat(q.Get("min"), 64)
+		if e1 != nil || e2 != nil || e3 != nil {
+			w.WriteHeader(400)
+			return
+		}
+		ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+		defer cancel()
+		n, e := svc.Count(ctx, a, b, m)
+		if e != nil {
+			reply(w, nil, e)
+			return
+		}
+		reply(w, map[string]int{"count": n}, nil)
 	})
 	mux.HandleFunc("GET /api/detail/{id}", func(w http.ResponseWriter, r *http.Request) {
 		id := r.PathValue("id")

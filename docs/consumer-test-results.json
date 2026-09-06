@@ -1,6 +1,6 @@
 {
   "archive": "darwin-arm64",
-  "root": "/private/tmp/atlas-consumer-s8GVQ8",
+  "root": "/private/tmp/atlas-consumer-7dMl9S",
   "checks": [
     "Fresh ZIP extraction",
     "Native executable start",
@@ -16,5 +16,5 @@
   ],
   "windowsRuntimeTested": false,
   "intelMacRuntimeTested": false,
-  "generated": "2026-09-06T22:41:12.264Z"
+  "generated": "2026-09-06T22:48:52.231Z"
 }

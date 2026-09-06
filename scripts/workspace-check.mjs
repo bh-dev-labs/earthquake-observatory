@@ -290,15 +290,25 @@ try {
   await page.locator("canvas").evaluate((canvas) => {
     const context = canvas.getContext("2d");
     const clear = context.clearRect.bind(context);
-    const fill = context.fillText.bind(context);
+    const draw = context.drawImage.bind(context);
+    const fill = CanvasRenderingContext2D.prototype.fillText;
+    CanvasRenderingContext2D.prototype.fillText = function (text, ...args) {
+      this.canvas.labelText = text;
+      return fill.call(this, text, ...args);
+    };
     canvas.drawnLabels = [];
+    canvas.labelFrames = [];
     context.clearRect = (...args) => {
       canvas.drawnLabels = [];
       clear(...args);
     };
-    context.fillText = (text, ...args) => {
-      canvas.drawnLabels.push(text);
-      fill(text, ...args);
+    context.drawImage = (sprite, x, y, ...args) => {
+      if (sprite.labelText) {
+        canvas.drawnLabels.push(sprite.labelText);
+        if (sprite.labelText === "Australia")
+          canvas.labelFrames.push({ sprite, x, y });
+      }
+      draw(sprite, x, y, ...args);
     };
   });
   const countries = page.getByRole("checkbox", {
@@ -320,6 +330,31 @@ try {
       .locator("canvas")
       .evaluate((canvas) => canvas.drawnLabels.includes("Canada")),
     false,
+  );
+  await page
+    .getByRole("button", { name: "Auto-rotate: off", exact: true })
+    .click();
+  await page.waitForFunction(
+    () => document.querySelector("canvas").labelFrames.length >= 30,
+  );
+  await page
+    .getByRole("button", { name: "Auto-rotate: on", exact: true })
+    .click();
+  const motion = await page.locator("canvas").evaluate((canvas) => {
+    const frames = canvas.labelFrames;
+    return {
+      sprites: new Set(frames.map((f) => f.sprite)).size,
+      fractional: frames.some((f) => Math.abs(f.x - Math.round(f.x)) > 0.01),
+      moved: Math.abs(frames.at(-1).x - frames[0].x) > 0.1,
+    };
+  });
+  assert.equal(motion.sprites, 1, "rotation must reuse the same glyph raster");
+  assert.ok(
+    motion.fractional && motion.moved,
+    "names move at fractional pixel positions",
+  );
+  checks.push(
+    "Country text reuses its raster across 30 rotating frames with fractional movement",
   );
   await countries.uncheck();
   await page.waitForFunction(

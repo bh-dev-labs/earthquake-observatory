@@ -1,11 +1,11 @@
 # Changelog
 
-## 0.2.0 (unreleased; next rebuild)
+## 0.2.0 (local release candidate)
 
 - Added the USGS magnitude-threshold summary feeds. A Detail control selects `all`, `M1.0+`, `M2.5+`, `M4.5+` or significant-only for any recent period; the choice is carried in shared view links. The 30-day feed drops from roughly 8 MiB to a few hundred KiB at `M4.5+`.
 - Historical retrievals ask the catalog for a size estimate first and refuse a search whose estimate exceeds the 50,000-event budget rather than spending the 64-request partition budget to discover it. The guard lives in the server, so shared links, retries and direct API calls are covered; the estimate is shown as "expected" in retrieval progress, and `/api/history/count` exposes it on its own.
 - The Detail control reflects the committed query, so a failed or cancelled threshold change falls back to what is actually loaded; a shared link with an unknown threshold is reported as invalid rather than silently loading the largest feed.
-- Country names no longer jump or shimmer while the globe turns. Which names appear is decided once per zoom from fixed tiers, with conflicts resolved in geographic space, so rotation only fades names at the limb. Anchors move inside bent or fragmented countries, long names are shortened, the largest countries use a larger face, labels draw beneath event markers, and text snaps to whole pixels.
+- Refactored country labels to reuse cached text rasters with fractional-pixel movement, removing whole-pixel snapping and per-frame glyph rendering. All countries now participate in geographic spacing instead of a global top-country quota; zoom fades names in without evicting existing names, and hemisphere visibility eases at the limb. Browser checks verify raster reuse during rotation, globe/map toggles and responsive layouts.
 - Repaired the browser checks: `browser-check.mjs` waited for a lesson heading renamed in 8b3ec0a, and the workspace/extended checks addressed the period picker by a now-ambiguous selector.
 
 ## 0.1.0 package refresh (2026-09-06)

@@ -14,6 +14,7 @@ export type LabelPlan = {
   label: CountryLabel;
   halfWidth: number;
   size: number;
+  opacity: number;
 }[];
 
 const short: Record<string, string> = {
@@ -94,53 +95,61 @@ export function countryLabels(countries: FeatureCollection): CountryLabel[] {
     .sort((first, second) => second.area - first.area);
 }
 
-// Fixed zoom tiers keep the set of candidate names deterministic: a country
-// is either in the tier for this zoom or not, regardless of where the globe
-// is pointing. Larger countries get a slightly larger face.
-export function labelBudget(zoom: number) {
-  return Math.round(18 * zoom * zoom);
-}
-
 export function labelSize(rank: number) {
   return rank < 12 ? 13 : 11;
 }
 
-// Choose which candidates may coexist at a given map scale, in pixels per
-// radian. Pairs are tested on the local tangent plane, so the answer does not
-// depend on the camera; near the limb foreshortening brings labels closer,
-// but there they are already fading out.
+function smoothstep(value: number) {
+  const t = Math.max(0, Math.min(1, value));
+  return t * t * (3 - 2 * t);
+}
+
+// Give every country a permanent geographic anchor and an admission scale.
+// All higher-priority anchors reserve space, even while hidden. This makes
+// zoom visibility monotone: a newly admitted name never evicts an old one.
+// Camera movement does not participate in admission or move labels aside.
 export function planLabels(
   countries: CountryLabel[],
   measure: (name: string, size: number) => number,
   scale: number,
-  zoom: number,
+  _zoom: number,
   gap = 6,
 ): LabelPlan {
   const plan: LabelPlan = [];
-  const budget = labelBudget(zoom);
-  const lineHeight = 16;
-  countries.slice(0, budget).forEach((label, rank) => {
+  countries.forEach((label, rank) => {
     const size = labelSize(rank);
     const halfWidth = measure(label.name, size) / 2 + 4;
     const [lon, lat] = label.coordinate;
-    const stretch = Math.cos((lat * Math.PI) / 180);
-    const conflict = plan.some((other) => {
+    let admissionScale = 0;
+    for (const other of plan) {
       const [otherLon, otherLat] = other.label.coordinate;
-      let dLon = Math.abs(lon - otherLon);
-      if (dLon > 180) dLon = 360 - dLon;
+      const delta = Math.abs(lon - otherLon);
       const dx =
-        ((dLon * Math.PI) / 180) *
-        scale *
-        Math.max(stretch, Math.cos((otherLat * Math.PI) / 180));
-      const dy = ((Math.abs(lat - otherLat) * Math.PI) / 180) * scale;
-      return dx < halfWidth + other.halfWidth + gap && dy < lineHeight + gap;
+        ((Math.min(delta, 360 - delta) * Math.PI) / 180) *
+        Math.max(
+          Math.cos((lat * Math.PI) / 180),
+          Math.cos((otherLat * Math.PI) / 180),
+        );
+      const dy = (Math.abs(lat - otherLat) * Math.PI) / 180;
+      admissionScale = Math.max(
+        admissionScale,
+        Math.min(
+          dx > 1e-9 ? (halfWidth + other.halfWidth + gap) / dx : Infinity,
+          dy > 1e-9 ? (16 + gap) / dy : Infinity,
+        ),
+      );
+    }
+    plan.push({
+      label,
+      halfWidth,
+      size,
+      opacity: smoothstep((scale - admissionScale) / 45),
     });
-    if (!conflict) plan.push({ label, halfWidth, size });
   });
   return plan;
 }
 
-// Labels fade over the last 0.2 rad before the limb instead of cutting off
+// Labels fade across a broad band before the limb instead of cutting off
 // at one angle, so a rotating globe eases names in rather than popping them.
 export function countryLabelOpacity(
   country: CountryLabel,
@@ -149,7 +158,7 @@ export function countryLabelOpacity(
 ) {
   if (flat) return 1;
   const distance = geoDistance(country.coordinate, centre);
-  return Math.max(0, Math.min(1, (Math.PI / 2 - 0.05 - distance) / 0.2));
+  return smoothstep((Math.PI / 2 - 0.12 - distance) / 0.3);
 }
 
 export function countryLabelVisible(

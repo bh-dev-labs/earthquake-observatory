@@ -7,7 +7,6 @@ import {
   countryLabels,
   countryLabelOpacity,
   countryLabelVisible,
-  labelBudget,
   planLabels,
 } from "./countryLabels";
 import { geoContains } from "d3-geo";
@@ -62,13 +61,19 @@ test("anchors sit inside their country and long names are shortened", () => {
 
 test("a label plan depends on zoom and scale, never on the camera", () => {
   const measure = (name: string, size: number) => name.length * size * 0.55;
-  const near = planLabels(labels, measure, 380, 1);
-  const far = planLabels(labels, measure, 250, 0.65);
-  const close = planLabels(labels, measure, 950, 2.5);
+  const near = planLabels(labels, measure, 380, 1).filter((e) => e.opacity > 0);
+  const far = planLabels(labels, measure, 250, 0.65).filter(
+    (e) => e.opacity > 0,
+  );
+  const close = planLabels(labels, measure, 950, 2.5).filter(
+    (e) => e.opacity > 0,
+  );
   assert.ok(far.length < near.length && near.length < close.length);
-  assert.ok(near.length <= labelBudget(1));
+  assert.ok(near.some((e) => e.label.name === "Japan"));
   assert.deepEqual(
-    planLabels(labels, measure, 380, 1).map((entry) => entry.label.name),
+    planLabels(labels, measure, 380, 1)
+      .filter((e) => e.opacity > 0)
+      .map((entry) => entry.label.name),
     near.map((entry) => entry.label.name),
   );
   // Nothing in a plan overlaps on the tangent plane at that scale.
@@ -129,4 +134,17 @@ test("country-name state is independent of plates and older shared views default
   assert.equal(parseView(JSON.parse(JSON.stringify(view))).countries, true);
   assert.equal(parseView({ mode: "demo", plates: true }).countries, false);
   assert.equal(parseView({ mode: "demo", countries: "true" }).countries, false);
+});
+
+test("zoom never evicts a country and admission fades continuously", () => {
+  const measure = (name: string, size: number) => name.length * size * 0.55;
+  let previous = planLabels(labels, measure, 100, 1);
+  for (let scale = 101; scale <= 1000; scale++) {
+    const next = planLabels(labels, measure, scale, 1);
+    next.forEach((entry, i) => {
+      assert.ok(entry.opacity >= previous[i].opacity);
+      assert.ok(entry.opacity - previous[i].opacity < 0.034);
+    });
+    previous = next;
+  }
 });

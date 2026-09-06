@@ -65,6 +65,9 @@ export function Globe(p: Props) {
     key: "",
     plan: [],
   });
+  // Rasterize each name once per theme/DPR; fractional translations then
+  // move the same glyph image instead of changing font hinting every frame.
+  const labelSprites = useRef(new Map<string, HTMLCanvasElement>());
   const pointers = useRef(new Map<number, [number, number]>());
   const drag = useRef({ x: 0, y: 0, moved: 0, pinch: 0, multi: false });
   useEffect(() => {
@@ -148,10 +151,15 @@ export function Globe(p: Props) {
     }
     const [w, h] = size,
       dpr = Math.min(2, devicePixelRatio || 1);
-    canvas.width = w * dpr;
-    canvas.height = h * dpr;
+    if (
+      canvas.width !== Math.round(w * dpr) ||
+      canvas.height !== Math.round(h * dpr)
+    ) {
+      canvas.width = Math.round(w * dpr);
+      canvas.height = Math.round(h * dpr);
+    }
     canvas.style.height = h + "px";
-    ctx.scale(dpr, dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, w, h);
     const proj = p.flat
       ? geoEquirectangular()
@@ -270,31 +278,50 @@ export function Globe(p: Props) {
         };
       }
       ctx.save();
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillStyle = token("--ink-strong");
-      ctx.strokeStyle = token("--globe-ocean");
-      ctx.lineWidth = 3;
-      ctx.lineJoin = "round";
-      for (const { label, size } of labelPlan.current.plan) {
-        const alpha = countryLabelOpacity(
-          label,
-          [p.camera.lon, p.camera.lat],
-          p.flat,
-        );
+      for (const { label, size, halfWidth, opacity } of labelPlan.current
+        .plan) {
+        const alpha =
+          opacity *
+          countryLabelOpacity(label, [p.camera.lon, p.camera.lat], p.flat);
         if (alpha <= 0) continue;
         const point = proj(label.coordinate);
         if (!point) continue;
-        // Whole-pixel anchors: text re-antialiased at a new subpixel offset
-        // every frame reads as shimmer while the globe turns.
-        const x = Math.round(point[0]),
-          y = Math.round(point[1]);
-        ctx.font = `${size}px sans-serif`;
+        const spriteKey = [label.name, size, dpr, theme].join();
+        let sprite = labelSprites.current.get(spriteKey);
+        if (!sprite) {
+          sprite = document.createElement("canvas");
+          sprite.width = Math.ceil(halfWidth * 2 * dpr);
+          sprite.height = Math.ceil((size + 12) * dpr);
+          const ink = sprite.getContext("2d")!;
+          ink.scale(dpr, dpr);
+          ink.font = `${size}px sans-serif`;
+          ink.textAlign = "center";
+          ink.textBaseline = "middle";
+          ink.fillStyle = token("--ink-strong");
+          ink.strokeStyle = token("--globe-ocean");
+          ink.lineWidth = 3;
+          ink.lineJoin = "round";
+          ink.strokeText(
+            label.name,
+            sprite.width / dpr / 2,
+            sprite.height / dpr / 2,
+          );
+          ink.fillText(
+            label.name,
+            sprite.width / dpr / 2,
+            sprite.height / dpr / 2,
+          );
+          labelSprites.current.set(spriteKey, sprite);
+        }
         ctx.globalAlpha = alpha;
-        ctx.strokeText(label.name, x, y);
-        ctx.fillText(label.name, x, y);
+        ctx.drawImage(
+          sprite,
+          point[0] - sprite.width / dpr / 2,
+          point[1] - sprite.height / dpr / 2,
+          sprite.width / dpr,
+          sprite.height / dpr,
+        );
       }
-      ctx.globalAlpha = 1;
       ctx.restore();
     }
     hits.current = [];

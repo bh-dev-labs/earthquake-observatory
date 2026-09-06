@@ -26,6 +26,7 @@ export type View = {
   camera: { lon: number; lat: number; zoom: number };
   flat: boolean;
   plates: boolean;
+  countries: boolean;
   section: boolean;
   transect: Section;
   selected?: string;
@@ -324,6 +325,7 @@ export function parseView(value: unknown): View {
     },
     flat: value.flat === true,
     plates: value.plates === true,
+    countries: value.countries === true,
     section: value.section === true,
     transect: validSection(value.transect) ? value.transect : defaultSection,
     selected: typeof value.selected === "string" ? value.selected : undefined,

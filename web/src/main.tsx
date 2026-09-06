@@ -13,7 +13,6 @@ import { SelectedEvent } from "./SelectedEvent";
 import { Replay } from "./Replay";
 import { ActivityAreas } from "./ActivityAreas";
 import { EarthPanel } from "./EarthPanel";
-import { Investigations } from "./Investigations";
 import { TransectEditor } from "./TransectEditor";
 import { useStable } from "./hooks";
 import { useDataset } from "./useDataset";
@@ -67,6 +66,7 @@ function App() {
     [camera, setCamera] = useState<Camera>({ lon: 150, lat: 15, zoom: 1 }),
     [flat, setFlat] = useState(false),
     [plates, setPlates] = useState(false),
+    [countries, setCountries] = useState(false),
     [selected, setSelected] = useState<Event | null>(null),
     [auto, setAuto] = useState(storedAuto),
     [autoWanted, setAutoWanted] = useState(storedAuto),
@@ -478,6 +478,7 @@ function App() {
       cursor: Number.isFinite(cursor) ? cursor : null,
       zone,
       plates,
+      countries,
       section,
       transect,
       near: near ? { radius: nearRadius, hours: nearHours } : null,
@@ -490,6 +491,7 @@ function App() {
     setCamera(state.camera);
     setFlat(state.flat);
     setPlates(state.plates);
+    setCountries(state.countries);
     setSection(state.section);
     setTransect(state.transect);
     setCursor(state.cursor ?? Infinity);
@@ -510,17 +512,6 @@ function App() {
       }
     }
   }
-  const stableView = useStable(() => currentView());
-  const openInvestigation = useStable((next: Dataset, state: View) => {
-    replace(next, state.query);
-    restoreView(state, next);
-    setMessage("Pinned or cached snapshot reopened locally.");
-  });
-  const runInvestigation = useStable((requested: Query, state: View) => {
-    void load(requested.mode, requested).then((next) => {
-      if (next) restoreView(state, next);
-    });
-  });
   async function share() {
     if (mode === "snapshot") {
       setMessage(
@@ -971,6 +962,8 @@ function App() {
             flat={flat}
             setFlat={setFlat}
             plates={plates}
+            countries={countries}
+            setCountries={setCountries}
             setPlates={setPlates}
             region={filters.region}
             section={section}
@@ -1091,13 +1084,6 @@ function App() {
           hasDataset={!!dataset}
           exportData={stableExport}
           importSnapshot={importSnapshot}
-        />
-        <Investigations
-          dataset={dataset}
-          getView={stableView}
-          disabled={busy || lesson >= 0}
-          onOpen={openInvestigation}
-          onRun={runInvestigation}
         />
         <Analysis
           events={filtered}

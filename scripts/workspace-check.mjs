@@ -213,72 +213,11 @@ try {
     "Shared history retains committed query despite unsubmitted edits",
   );
 
-  await page.getByLabel("Name", { exact: true }).fill("February study");
-  await page
-    .getByLabel("Notes", { exact: true })
-    .fill("Initial interpretation");
-  await page
-    .getByRole("button", { name: "Pin current snapshot", exact: true })
-    .click();
-  await page
-    .getByText("Snapshot pinned. Notes and view saved locally.")
-    .waitFor();
-  await page
-    .getByLabel("Notes", { exact: true })
-    .fill("Revised interpretation");
-  await page
-    .getByRole("button", { name: "Save name & notes", exact: true })
-    .click();
-  await page.getByText("Notes saved; pinned observations unchanged.").waitFor();
-  const altered = structuredClone(demo.features.slice(0, 2));
-  altered[0].properties.mag += 1;
-  altered[0].properties.updated += 1;
-  await upload({ ...demo, features: altered });
-  await count(2);
-  await page
-    .getByRole("button", { name: "Compare revisions", exact: true })
-    .click();
-  await page.getByText("1 changed", { exact: false }).waitFor();
-  assert.match(
-    await page.locator(".revision-comparison tbody").innerText(),
-    /Magnitude/,
-  );
-  const downloadReady = page.waitForEvent("download");
-  await page
-    .getByRole("button", { name: "Export comparison CSV", exact: true })
-    .click();
-  const downloaded = await downloadReady;
-  assert.match(await fs.readFile(await downloaded.path(), "utf8"), /Magnitude/);
-  await page
-    .getByRole("button", { name: "Reopen pinned snapshot", exact: true })
-    .click();
-  await count(618);
-  await page.reload();
-  await count(618);
-  await page
-    .getByLabel("Investigation", { exact: true })
-    .selectOption({ label: "February study" });
-  await page
-    .getByRole("button", { name: "Reopen pinned snapshot", exact: true })
-    .waitFor({ state: "visible" });
-  await page
-    .getByRole("button", { name: "Reopen pinned snapshot", exact: true })
-    .click();
-  await count(618);
   assert.equal(
-    await page.getByLabel("Notes", { exact: true }).inputValue(),
-    "Revised interpretation",
+    await page.getByRole("region", { name: "Saved investigations" }).count(),
+    0,
   );
-  await page
-    .getByRole("button", { name: "Run saved query", exact: true })
-    .click();
-  await page
-    .locator(".status")
-    .filter({ hasText: "Historical catalog" })
-    .waitFor();
-  checks.push(
-    "Pinned investigation, editable notes, offline reopen, query rerun, and revision CSV",
-  );
+  checks.push("Saved investigations panel removed");
 
   await page.locator(".events .event-link").first().click();
   await page.getByText("Source uncertainty & quality", { exact: true }).click();
@@ -305,37 +244,11 @@ try {
     .locator(".depth-section")
     .getByText("-130, 30 to -110, 45", { exact: false })
     .waitFor();
-  await page.getByLabel("Name", { exact: true }).fill("Custom transect");
-  await page
-    .getByRole("button", { name: "Pin current snapshot", exact: true })
-    .click();
-  await page
-    .getByText("Snapshot pinned. Notes and view saved locally.")
-    .waitFor();
-  await page.getByRole("button", { name: "Tonga preset", exact: true }).click();
-  await page
-    .getByRole("button", { name: "Reopen pinned snapshot", exact: true })
-    .click();
   assert.equal(
     await page.getByLabel("Start longitude", { exact: true }).inputValue(),
     "-130",
   );
-  checks.push(
-    "Custom transect updates map/chart and survives saved-view restoration",
-  );
-
-  await page.getByText("Local cache", { exact: true }).click();
-  await page
-    .getByRole("button", { name: "Clear rolling cache", exact: true })
-    .click();
-  await page
-    .getByText("Rolling cache cleared. Pinned investigations retained.")
-    .waitFor();
-  await page
-    .getByRole("button", { name: "Reopen pinned snapshot", exact: true })
-    .click();
-  await count(618);
-  checks.push("Cache clearing preserves pinned investigations");
+  checks.push("Custom transect updates map/chart");
 
   const canvasHash = async () =>
     page.locator("canvas").evaluate((canvas) => {
@@ -373,12 +286,90 @@ try {
   await page
     .getByRole("button", { name: "Auto-rotate: on", exact: true })
     .click();
+  await page.getByRole("button", { name: "Reset view", exact: true }).click();
+  await page.locator("canvas").evaluate((canvas) => {
+    const context = canvas.getContext("2d");
+    const clear = context.clearRect.bind(context);
+    const fill = context.fillText.bind(context);
+    canvas.drawnLabels = [];
+    context.clearRect = (...args) => {
+      canvas.drawnLabels = [];
+      clear(...args);
+    };
+    context.fillText = (text, ...args) => {
+      canvas.drawnLabels.push(text);
+      fill(text, ...args);
+    };
+  });
+  const countries = page.getByRole("checkbox", {
+    name: "Country names",
+    exact: true,
+  });
+  const plates = page.getByRole("checkbox", {
+    name: "Plate boundaries",
+    exact: true,
+  });
+  assert.equal(await plates.isChecked(), false);
+  await countries.check();
+  await page.waitForFunction(() =>
+    document.querySelector("canvas").drawnLabels.includes("Australia"),
+  );
+  assert.equal(await plates.isChecked(), false);
+  assert.equal(
+    await page
+      .locator("canvas")
+      .evaluate((canvas) => canvas.drawnLabels.includes("Canada")),
+    false,
+  );
+  await countries.uncheck();
+  await page.waitForFunction(
+    () => !document.querySelector("canvas").drawnLabels.includes("Australia"),
+  );
+  await countries.check();
+  await page.getByRole("button", { name: "2D map", exact: true }).click();
+  await page.waitForFunction(() =>
+    document.querySelector("canvas").drawnLabels.includes("Canada"),
+  );
+  await plates.check();
+  assert.equal(await countries.isChecked(), true);
+  await plates.uncheck();
+  await page.getByRole("button", { name: "3D globe", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Copy view link", exact: true })
+    .click();
+  await page.waitForFunction(
+    async () =>
+      JSON.parse(
+        new URL(await navigator.clipboard.readText()).searchParams.get("view"),
+      ).countries === true,
+  );
+  const countryLink = await page.evaluate(() => navigator.clipboard.readText());
+  await page.goto(countryLink);
+  await count(618);
+  assert.equal(await countries.isChecked(), true);
+  assert.equal(await plates.isChecked(), false);
+  checks.push(
+    "Country names render independently of plates on globe and flat map, toggle off, hide the far hemisphere, and survive shared links",
+  );
   const screenshots = [];
   for (const [name, width, height] of [
     ["desktop", 1440, 1050],
+    ["desktop-short", 1440, 650],
+    ["windows-laptop", 1366, 768],
+    ["windows-scaled", 1093, 614],
+    ["windows-small", 912, 513],
     ["mobile", 390, 844],
+    ["mobile-narrow", 320, 568],
   ]) {
     await page.setViewportSize({ width, height });
+    await page.waitForFunction(() => {
+      const canvas = document.querySelector("canvas");
+      const width = canvas.parentElement.clientWidth;
+      const expected = Math.round(
+        Math.min(640, innerHeight * 0.55, Math.max(240, width * 0.7)),
+      );
+      return Math.abs(canvas.getBoundingClientRect().height - expected) <= 1;
+    });
     await page.locator("canvas").scrollIntoViewIfNeeded();
     assert.ok((await canvasHash()).colors > 5);
     assert.ok(
@@ -401,7 +392,7 @@ try {
     screenshots.push(target);
   }
   checks.push(
-    "Desktop/mobile nonblank animated canvas, no horizontal overflow, zero axe violations",
+    "Desktop, Windows-scaled, and mobile layouts resize without horizontal overflow; nonblank animated canvas and zero axe violations",
   );
   assert.deepEqual(errors, []);
   console.log(JSON.stringify({ checks, errors, screenshots }, null, 2));

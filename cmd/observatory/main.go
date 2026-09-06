@@ -25,6 +25,10 @@ import (
 //go:embed dist
 var assets embed.FS
 
+// version is the single source of truth for the release string; the release
+// script overrides it with -ldflags "-X main.version=$version".
+var version = "dev"
+
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
@@ -79,7 +83,7 @@ func main() {
 		json.NewEncoder(w).Encode(v)
 	}
 	mux.HandleFunc("GET /api/health", func(w http.ResponseWriter, r *http.Request) {
-		reply(w, map[string]string{"status": "ok", "version": "0.1.0"}, nil)
+		reply(w, map[string]string{"status": "ok", "version": version}, nil)
 	})
 	mux.HandleFunc("GET /api/ready", func(w http.ResponseWriter, r *http.Request) {
 		reply(w, map[string]bool{"ready": store.Check() == nil}, nil)

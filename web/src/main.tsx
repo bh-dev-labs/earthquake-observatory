@@ -24,6 +24,7 @@ import {
   type Region,
 } from "./model";
 import "./style.css";
+const repository = "https://github.com/bruce-hoppe_uoft/seismic_atlas";
 const fmt = (v: number | null | undefined, digits = 1) =>
   v == null ? "Unavailable" : v.toFixed(digits);
 const utc = (t: number) =>
@@ -82,7 +83,8 @@ function App() {
     [near, setNear] = useState(false),
     [nearRadius, setNearRadius] = useState(300),
     [nearHours, setNearHours] = useState(24),
-    [zone, setZone] = useState("UTC");
+    [zone, setZone] = useState("UTC"),
+    [version, setVersion] = useState("");
   const abort = useRef<AbortController | null>(null),
     selectionToken = useRef(0),
     cache = useRef(new Map<string, any>()),
@@ -224,6 +226,12 @@ function App() {
       .then((r) => r.json())
       .then((c) => load(c.demo ? "demo" : "day"))
       .catch(() => load("demo"));
+  }, []);
+  useEffect(() => {
+    fetch("/api/health")
+      .then((r) => r.json())
+      .then((h) => setVersion(h.version))
+      .catch(() => {});
   }, []);
   useEffect(() => {
     const id = setInterval(() => {
@@ -1629,8 +1637,8 @@ function App() {
           </button>
         </div>
         <footer>
-          <a href="mailto:bruce.hoppe@utoronto.ca">
-            coded by bruce.hoppe@utoronto.ca
+          <a href={repository} target="_blank" rel="noreferrer">
+            Built by Bruce Hoppe · Source on GitHub
           </a>
           <div>
             <strong>Data & references</strong>
@@ -1717,14 +1725,25 @@ function App() {
                 ))
               ) : (
                 <>
-                  <p>Earthquake Observatory 0.1.0 · local release candidate</p>
+                  <p>
+                    Earthquake Observatory {version || "…"} · local release
+                    candidate
+                  </p>
                   <p>
                     Explore earthquake observations and learn how to read them.
                     No accounts, telemetry, LLM calls, map tokens or remote
                     fonts. Live retrieval contacts USGS through this local Go
                     server. Clicking source links opens the source website.
                   </p>
-                  <p>coded by bruce.hoppe@utoronto.ca</p>
+                  <p>
+                    Built by Bruce Hoppe. Source code, licence and issue
+                    tracker:{" "}
+                    <a href={repository} target="_blank" rel="noreferrer">
+                      {repository.replace("https://", "")}
+                    </a>
+                    . An independent educational project, not affiliated with or
+                    endorsed by the University of Toronto or the USGS.
+                  </p>
                   {[
                     "Earthquake observations",
                     "Scientific explanations",

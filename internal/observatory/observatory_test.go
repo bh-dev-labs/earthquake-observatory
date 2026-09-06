@@ -78,6 +78,17 @@ func TestStoreRevisionMembershipBackup(t *testing.T) {
 type transport func(*http.Request) (*http.Response, error)
 
 func (f transport) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
+
+// History asks the catalog for an estimate before partitioning. Answer that
+// request here so the transports below keep their per-call arithmetic.
+func countAware(n int, inner transport) transport {
+	return func(r *http.Request) (*http.Response, error) {
+		if strings.Contains(r.URL.Path, "/count") {
+			return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(fmt.Sprintf(`{"count":%d,"maxAllowed":20000}`, n))), Header: make(http.Header)}, nil
+		}
+		return inner(r)
+	}
+}
 func TestStaleRecoveryAndValidation(t *testing.T) {
 	s, _ := Open(filepath.Join(t.TempDir(), "db"))
 	defer s.DB.Close()
@@ -144,6 +155,37 @@ func TestThresholdFeedAndCount(t *testing.T) {
 		t.Fatal("future interval accepted")
 	}
 }
+func TestHistoryEstimateGuard(t *testing.T) {
+	s, _ := Open(filepath.Join(t.TempDir(), "db"))
+	defer s.DB.Close()
+	svc := NewService(s)
+	queries := 0
+	feed := func(r *http.Request) (*http.Response, error) {
+		queries++
+		return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(string(fixture("1", "2", 3)))), Header: make(http.Header)}, nil
+	}
+	svc.Client.Transport = countAware(historyBudget+1, feed)
+	_, e := svc.History(context.Background(), time.UnixMilli(1000), time.UnixMilli(5000), 0)
+	if e == nil || !strings.Contains(e.Error(), "exceed") || queries != 0 {
+		t.Fatalf("oversize estimate not refused before partitioning: %v, %d queries", e, queries)
+	}
+	svc.Client.Transport = countAware(historyBudget, feed)
+	if _, e = svc.History(context.Background(), time.UnixMilli(1000), time.UnixMilli(5000), 0); e != nil || queries != 1 {
+		t.Fatalf("estimate at the budget refused: %v", e)
+	}
+	// A count the catalog cannot answer must not block the retrieval.
+	svc.Client.Transport = transport(func(r *http.Request) (*http.Response, error) {
+		if strings.Contains(r.URL.Path, "/count") {
+			return &http.Response{StatusCode: 503, Body: io.NopCloser(strings.NewReader("busy")), Header: make(http.Header)}, nil
+		}
+		return feed(r)
+	})
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	if _, e = svc.History(ctx, time.UnixMilli(1000), time.UnixMilli(5000), 0); e != nil || queries != 2 {
+		t.Fatalf("failed estimate blocked retrieval: %v", e)
+	}
+}
 func TestHistoricalCancellationBudgetAndAtomicity(t *testing.T) {
 	s, _ := Open(filepath.Join(t.TempDir(), "db"))
 	defer s.DB.Close()
@@ -164,7 +206,7 @@ func TestDensePartitions(t *testing.T) {
 	calls := 0
 	a := time.UnixMilli(1000).UTC()
 	b := time.UnixMilli(5000).UTC()
-	svc.Client.Transport = transport(func(r *http.Request) (*http.Response, error) {
+	svc.Client.Transport = countAware(1, func(r *http.Request) (*http.Response, error) {
 		calls++
 		c, _ := Parse(fixture("1", "2", 3))
 		if calls == 1 {
@@ -260,7 +302,7 @@ func TestMidPartitionFailureNeverPublishes(t *testing.T) {
 	defer s.DB.Close()
 	svc := NewService(s)
 	calls := 0
-	svc.Client.Transport = transport(func(r *http.Request) (*http.Response, error) {
+	svc.Client.Transport = countAware(1, func(r *http.Request) (*http.Response, error) {
 		calls++
 		c, _ := Parse(fixture("1", "2", 3))
 		status := 200
@@ -362,7 +404,7 @@ func TestHistoryOffsetsAndProgress(t *testing.T) {
 	}
 	defer store.DB.Close()
 	service := NewService(store)
-	service.Client.Transport = transport(func(request *http.Request) (*http.Response, error) {
+	service.Client.Transport = countAware(1, func(request *http.Request) (*http.Response, error) {
 		query := request.URL.Query()
 		if query.Get("starttime") != "1970-01-01T00:00:01.000Z" || query.Get("endtime") != "1970-01-01T00:00:04.999Z" {
 			t.Errorf("wrong UTC interval: %v", query)
@@ -378,7 +420,7 @@ func TestHistoryOffsetsAndProgress(t *testing.T) {
 		t.Fatal(result.Query)
 	}
 	progress, exists := service.HistoryProgress("utc-test")
-	if !exists || progress.State != "complete" || progress.Requests != 1 || progress.Partitions != 1 || progress.Events != 1 {
+	if !exists || progress.State != "complete" || progress.Requests != 2 || progress.Partitions != 1 || progress.Events != 1 || progress.Expected != 1 {
 		t.Fatalf("bad progress: %+v", progress)
 	}
 	if _, err = service.History(context.Background(), time.UnixMilli(1000).Add(time.Nanosecond), time.UnixMilli(5000), 0); err == nil {
@@ -394,7 +436,7 @@ func TestTrackedHistoryCancellation(t *testing.T) {
 	defer store.DB.Close()
 	service := NewService(store)
 	started := make(chan struct{})
-	service.Client.Transport = transport(func(request *http.Request) (*http.Response, error) {
+	service.Client.Transport = countAware(1, func(request *http.Request) (*http.Response, error) {
 		close(started)
 		<-request.Context().Done()
 		return nil, request.Context().Err()

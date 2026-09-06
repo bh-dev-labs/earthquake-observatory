@@ -16,6 +16,7 @@ export type Progress = {
   requests: number;
   partitions: number;
   events: number;
+  expected?: number;
   error?: string;
 };
 

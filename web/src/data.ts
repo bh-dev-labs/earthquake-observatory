@@ -238,10 +238,13 @@ export function parseQuery(value: unknown): Query {
     )
   )
     throw Error("Invalid query mode");
-  const level = levels.includes(value.level as Level)
-    ? (value.level as Level)
-    : "all";
-  if (value.mode !== "history") return { mode: value.mode as Mode, level };
+  if (value.mode !== "history") {
+    // Absent means the default; a present but unknown threshold is a
+    // damaged link and is reported like any other invalid field.
+    if (value.level != null && !levels.includes(value.level as Level))
+      throw Error("Invalid magnitude threshold");
+    return { mode: value.mode as Mode, level: (value.level as Level) ?? "all" };
+  }
   if (typeof value.start !== "string" || typeof value.end !== "string")
     throw Error("Missing historical interval");
   const start = Date.parse(value.start),
@@ -280,7 +283,7 @@ export function queryURL(query: Query) {
     );
   return (
     "/api/recent?" +
-    new URLSearchParams({ period: query.mode, level: query.level || "all" })
+    new URLSearchParams({ period: query.mode, level: query.level ?? "all" })
   );
 }
 

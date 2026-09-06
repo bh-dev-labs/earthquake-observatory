@@ -10,7 +10,7 @@ Local same-origin JSON API. Investigation/cache/job endpoints are unreleased sou
 | `/api/recent?period=hour\|day\|week\|month&level=all\|1.0\|2.5\|4.5\|significant` | complete recent feed or last-good stale snapshot; `level` selects the USGS magnitude threshold and defaults to `all` |
 | `/api/demo` | embedded historical observations |
 | `/api/history?start=RFC3339&end=RFC3339&min=-2` | atomic half-open historical query; documented budgets apply |
-| `/api/history/count?start=RFC3339&end=RFC3339&min=-2` | `{"count":N}` for the same interval `/api/history` would retrieve, without spending its partition budget |
+| `/api/history/count?start=RFC3339&end=RFC3339&min=-2` | `{"count":N}` for the same interval `/api/history` would retrieve; the same estimate `/api/history` performs itself before partitioning |
 | `/api/detail/{USGS-event-id}` | allowlisted USGS GeoJSON event details |
 
 ## Investigations, cache and progress
@@ -32,7 +32,7 @@ Local same-origin JSON API. Investigation/cache/job endpoints are unreleased sou
 
 Supply a unique `job` parameter to `/api/history` to track it. IDs use 2-80 ASCII letters, digits, underscores or hyphens. States are `running`, `complete`, `failed`, or `cancelled`. Requests count upstream attempts including retries; partitions count completed leaf intervals, not an estimated total. Status is memory-only, bounded to 32 records; missing jobs return 404. Cancellation after completion does not undo publication.
 
-`/api/history/count` applies exactly the interval and magnitude validation `/api/history` applies, so an accepted estimate corresponds to an accepted retrieval. It issues one upstream request and takes no historical slot, so it can run while a retrieval is in flight. The interface calls it before submitting a historical search and refuses the retrieval when the estimate exceeds the 50,000-event budget.
+`/api/history` asks the catalog for a count before partitioning and refuses with a descriptive error when the estimate exceeds the 50,000-event budget, so shared links, retries and direct callers are all guarded without spending the 64-request budget to discover overflow. The estimate is advisory: if the count fails or times out (8 seconds) the retrieval proceeds under the partition and event budgets alone. A successful estimate appears as `expected` in the job's progress record. `/api/history/count` exposes the same estimate on its own; it applies the interval validation `/api/history` applies, takes no historical slot, and its count is reported in the job's `requests`.
 
 Recent threshold feeds are cached, keyed and stored per level, so switching thresholds does not evict the previous one. `all_month` is roughly 8 MiB where `4.5_month` is a few hundred KiB.
 

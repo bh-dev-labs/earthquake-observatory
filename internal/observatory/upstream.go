@@ -95,7 +95,10 @@ func (s *Service) Fetch(ctx context.Context, u string) ([]byte, error) {
 				if len(b) > 32<<20 {
 					return nil, fmt.Errorf("response exceeds 32 MiB")
 				}
-				if json.Valid(b) {
+				// Catalog queries and counts carry unique parameters and are
+				// never revalidated, so caching them only evicts detail and
+				// feed entries that do benefit from a 304.
+				if json.Valid(b) && !strings.Contains(parsed.Path, "/fdsnws/") {
 					s.cacheMu.Lock()
 					if len(s.responses) >= 32 {
 						// Evict the least recently fetched entry rather than an
@@ -182,15 +185,23 @@ func checkInterval(start, end time.Time, min float64) error {
 	return nil
 }
 
-// Count asks USGS how large a historical query is before History spends its
-// 64-request partition budget on it.
+// fdsnParams describes the half-open interval [a,b) to the catalog service,
+// whose endtime is inclusive at millisecond resolution. Count and History
+// must agree on this translation for the estimate to describe the retrieval.
+func fdsnParams(a, b time.Time, min float64) url.Values {
+	return url.Values{"format": {"geojson"}, "starttime": {a.Format("2006-01-02T15:04:05.000Z")}, "endtime": {b.Add(-time.Millisecond).Format("2006-01-02T15:04:05.000Z")}, "minmagnitude": {fmt.Sprint(min)}, "eventtype": {"earthquake"}}
+}
+
+const historyBudget = 50000
+
+// Count asks USGS how large a historical query is. History calls it before
+// spending its 64-request partition budget; it is also exposed directly.
 func (s *Service) Count(ctx context.Context, start, end time.Time, min float64) (int, error) {
 	start, end = start.UTC(), end.UTC()
 	if err := checkInterval(start, end, min); err != nil {
 		return 0, err
 	}
-	q := url.Values{"format": {"geojson"}, "starttime": {start.Format("2006-01-02T15:04:05.000Z")}, "endtime": {end.Add(-time.Millisecond).Format("2006-01-02T15:04:05.000Z")}, "minmagnitude": {fmt.Sprint(min)}, "eventtype": {"earthquake"}}
-	raw, err := s.Fetch(ctx, "https://earthquake.usgs.gov/fdsnws/event/1/count?"+q.Encode())
+	raw, err := s.Fetch(ctx, "https://earthquake.usgs.gov/fdsnws/event/1/count?"+fdsnParams(start, end, min).Encode())
 	if err != nil {
 		return 0, err
 	}
@@ -214,6 +225,24 @@ func (s *Service) History(ctx context.Context, start, end time.Time, min float64
 	if err := checkInterval(start, end, min); err != nil {
 		return Dataset{}, err
 	}
+	// One cheap request settles whether the query can fit before any
+	// partitioning starts. The estimate is advisory: if USGS cannot count,
+	// the partition and event budgets below still bound the retrieval, and a
+	// short deadline keeps an outage from doubling the wait for its error.
+	{
+		countCtx, cancel := context.WithTimeout(ctx, 8*time.Second)
+		expected, err := s.Count(countCtx, start, end, min)
+		cancel()
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return Dataset{}, ctxErr
+		}
+		if err == nil {
+			if expected > historyBudget {
+				return Dataset{}, fmt.Errorf("%d events exceed the %d-event budget; narrow the interval or raise the minimum magnitude", expected, historyBudget)
+			}
+			s.updateProgress(ctx, func(progress *Progress) { progress.Expected = expected })
+		}
+	}
 	query := fmt.Sprintf("USGS catalog [%s,%s) magnitude >= %g", start.Format(time.RFC3339Nano), end.Format(time.RFC3339Nano), min)
 	all := map[string]Feature{}
 	calls := 0
@@ -223,7 +252,9 @@ func (s *Service) History(ctx context.Context, start, end time.Time, min float64
 		if calls > 64 {
 			return fmt.Errorf("64-request budget exceeded; narrow the interval")
 		}
-		q := url.Values{"format": {"geojson"}, "starttime": {a.Format("2006-01-02T15:04:05.000Z")}, "endtime": {b.Add(-time.Millisecond).Format("2006-01-02T15:04:05.000Z")}, "minmagnitude": {fmt.Sprint(min)}, "eventtype": {"earthquake"}, "limit": {"20000"}, "orderby": {"time-asc"}}
+		q := fdsnParams(a, b, min)
+		q.Set("limit", "20000")
+		q.Set("orderby", "time-asc")
 		raw, err := s.Fetch(ctx, "https://earthquake.usgs.gov/fdsnws/event/1/query?"+q.Encode())
 		if err != nil {
 			return err
@@ -254,8 +285,8 @@ func (s *Service) History(ctx context.Context, start, end time.Time, min float64
 				all[e.ID] = e
 			}
 		}
-		if len(all) > 50000 {
-			return fmt.Errorf("50,000-event budget exceeded; narrow the query")
+		if len(all) > historyBudget {
+			return fmt.Errorf("%d-event budget exceeded; narrow the query", historyBudget)
 		}
 		s.updateProgress(ctx, func(progress *Progress) { progress.Partitions++; progress.Events = len(all) })
 		return nil

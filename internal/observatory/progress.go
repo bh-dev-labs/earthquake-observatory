@@ -12,6 +12,7 @@ type Progress struct {
 	Requests   int    `json:"requests"`
 	Partitions int    `json:"partitions"`
 	Events     int    `json:"events"`
+	Expected   int    `json:"expected,omitempty"`
 	Error      string `json:"error,omitempty"`
 }
 type historyJob struct {

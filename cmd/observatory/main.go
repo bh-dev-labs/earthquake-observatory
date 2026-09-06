@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -104,13 +105,21 @@ func main() {
 		d, e := store.Save("Bundled USGS historical snapshot: 2023-02-06 to 2023-02-13 UTC; M4+; retrieved 2026-09-06 UTC", b)
 		reply(w, d, e)
 	})
-	mux.HandleFunc("GET /api/history", func(w http.ResponseWriter, r *http.Request) {
-		q := r.URL.Query()
+	// Syntactic parsing only; semantic limits are the service's to enforce.
+	interval := func(w http.ResponseWriter, q url.Values) (time.Time, time.Time, float64, bool) {
 		a, e1 := time.Parse(time.RFC3339Nano, q.Get("start"))
 		b, e2 := time.Parse(time.RFC3339Nano, q.Get("end"))
 		m, e3 := strconv.ParseFloat(q.Get("min"), 64)
 		if e1 != nil || e2 != nil || e3 != nil {
 			w.WriteHeader(400)
+			return a, b, m, false
+		}
+		return a, b, m, true
+	}
+	mux.HandleFunc("GET /api/history", func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		a, b, m, ok := interval(w, q)
+		if !ok {
 			return
 		}
 		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Minute)
@@ -125,12 +134,8 @@ func main() {
 		reply(w, d, e)
 	})
 	mux.HandleFunc("GET /api/history/count", func(w http.ResponseWriter, r *http.Request) {
-		q := r.URL.Query()
-		a, e1 := time.Parse(time.RFC3339Nano, q.Get("start"))
-		b, e2 := time.Parse(time.RFC3339Nano, q.Get("end"))
-		m, e3 := strconv.ParseFloat(q.Get("min"), 64)
-		if e1 != nil || e2 != nil || e3 != nil {
-			w.WriteHeader(400)
+		a, b, m, ok := interval(w, r.URL.Query())
+		if !ok {
 			return
 		}
 		ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)

@@ -90,6 +90,7 @@ const report = {
   ],
   windowsRuntimeTested: false,
   intelMacRuntimeTested: false,
+  generated: new Date().toISOString(),
 };
 await fs.writeFile(
   "docs/consumer-test-results.json",

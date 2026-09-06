@@ -112,14 +112,56 @@ export function areaGroups(events: Event[]) {
   }
   return [...groups.values()].sort((a, b) => b.events.length - a.events.length);
 }
+// The stylesheet owns every colour. Canvas and SVG cannot resolve var(),
+// so they read the resolved token here; the cache is cleared when the theme
+// changes. Fallbacks keep the module usable under Node in tests.
+const fallbacks: Record<string, string> = {
+  "--depth-shallow": "#f2ac2f",
+  "--depth-mid": "#b8446f",
+  "--depth-deep": "#4a1d6a",
+  "--depth-unknown": "#8b969c",
+  "--ink": "#243740",
+  "--ink-muted": "#52656d",
+  "--surface": "#ffffff",
+  "--accent": "#28685d",
+  "--globe-ocean": "#e3eef0",
+  "--globe-land": "#91adb0",
+  "--globe-edge": "#b5cdd0",
+  "--globe-graticule": "#bfd3d6",
+  "--plate": "#865c77",
+  "--plate-label": "#62445b",
+  "--marker-edge": "#ffffff",
+  "--chart-bar": "#28685d",
+  "--chart-bar-soft": "#708f98",
+  "--chart-grid": "#dbe1e3",
+};
+let resolved: Record<string, string> | null = null;
+export function refreshPalette() {
+  resolved = null;
+}
+export function token(name: keyof typeof fallbacks | string): string {
+  if (!resolved) {
+    resolved = { ...fallbacks };
+    if (typeof document !== "undefined") {
+      const computed = getComputedStyle(document.documentElement);
+      for (const key of Object.keys(fallbacks)) {
+        const value = computed.getPropertyValue(key).trim();
+        if (value) resolved[key] = value;
+      }
+    }
+  }
+  return resolved[name] ?? fallbacks[name] ?? "#000";
+}
 export function color(depth: number | null) {
-  return depth === null
-    ? "#697780"
-    : depth < 70
-      ? "#b58b22"
-      : depth < 300
-        ? "#268882"
-        : "#5b4185";
+  return token(
+    depth === null
+      ? "--depth-unknown"
+      : depth < 70
+        ? "--depth-shallow"
+        : depth < 300
+          ? "--depth-mid"
+          : "--depth-deep",
+  );
 }
 export const radius = (mag: number | null) =>
   Math.max(3, Math.min(13, 3 + (mag ?? 0) * 1.35));

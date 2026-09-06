@@ -1,8 +1,9 @@
 {
   "count": 20000,
-  "p95Milliseconds": 0.8533749999999998,
+  "p95Milliseconds": 0.8237919999999974,
   "iterations": 100,
   "runtime": "v26.8.1",
   "platform": "darwin",
-  "arch": "arm64"
+  "arch": "arm64",
+  "generated": "2026-09-06T02:00:38.665Z"
 }

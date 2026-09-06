@@ -206,6 +206,7 @@ const result = {
     environment:
       "macOS arm64, headless Chromium 153, viewport 1440x1050; Playwright wall times include automation overhead",
   },
+  generated: new Date().toISOString(),
 };
 await fs.writeFile(
   "docs/extended-test-results.json",

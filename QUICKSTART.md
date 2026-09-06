@@ -11,7 +11,7 @@
 
 Data lives in the operating system's user configuration directory under `EarthquakeObservatory`. No Go, Node, Python or database installation is needed for the packaged application.
 
-Windows: keep the console window open while using the app; Ctrl+C stops it. macOS: choose **Quit observatory** in the footer when finished.
+Windows: keep the console window open while using the app; Ctrl+C stops it. macOS: choose **Stop the local server** at the foot of the page when finished.
 
 
-coded by bruce.hoppe@utoronto.ca
+Built by Bruce Hoppe · [github.com/bruce-hoppe_uoft/seismic_atlas](https://github.com/bruce-hoppe_uoft/seismic_atlas)

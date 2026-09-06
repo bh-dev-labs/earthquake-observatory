@@ -1,6 +1,86 @@
 import { memo } from "preact/compat";
-import { color, comparison, distance, transect, type Event } from "./model";
+import {
+  color,
+  comparison,
+  distance,
+  token,
+  transect,
+  type Event,
+} from "./model";
 import { useState } from "preact/hooks";
+
+const HOUR = 3600000,
+  DAY = 86400000;
+const pad = (n: number) => String(n).padStart(2, "0");
+
+// Bin width follows the loaded span: a 24-hour dataset binned by day is two
+// bars and tells nobody anything.
+function timeBins(events: Event[]) {
+  if (!events.length)
+    return { bins: [] as { start: number; count: number }[], size: DAY };
+  const times = events.map((e) => e.properties.time);
+  const min = Math.min(...times),
+    max = Math.max(...times);
+  const span = max - min;
+  const size = span <= 3 * DAY ? HOUR : span <= 14 * DAY ? 6 * HOUR : DAY;
+  const counts = new Map<number, number>();
+  for (let t = Math.floor(min / size) * size; t <= max; t += size)
+    counts.set(t, 0);
+  for (const time of times) {
+    const key = Math.floor(time / size) * size;
+    counts.set(key, (counts.get(key) || 0) + 1);
+  }
+  return {
+    bins: [...counts]
+      .sort((a, b) => a[0] - b[0])
+      .map(([start, count]) => ({ start, count })),
+    size,
+  };
+}
+
+function binName(size: number) {
+  return size === DAY
+    ? "UTC days"
+    : size === 6 * HOUR
+      ? "6-hour UTC bins"
+      : "hourly UTC bins";
+}
+
+function binLabel(start: number, size: number) {
+  const d = new Date(start);
+  return size === DAY
+    ? `${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`
+    : `${pad(d.getUTCDate())} ${pad(d.getUTCHours())}:00`;
+}
+
+function binFull(start: number, size: number) {
+  const d = new Date(start);
+  return size === DAY
+    ? d.toISOString().slice(0, 10)
+    : d.toISOString().slice(0, 16).replace("T", " ") + " UTC";
+}
+
+// Only the bins that carry data, plus one empty bin of breathing room, so a
+// handful of M1 events are not squeezed into a tenth of the axis.
+function magnitudeBins(events: Event[]) {
+  const values = events
+    .map((e) => e.properties.mag)
+    .filter((m): m is number => m !== null);
+  if (!values.length) return [];
+  const lo = Math.max(-2, Math.floor(Math.min(...values)) - 1),
+    hi = Math.min(10, Math.floor(Math.max(...values)) + 1);
+  return Array.from({ length: hi - lo + 1 }, (_, i) => ({
+    label: lo + i,
+    count: values.filter((m) => m >= lo + i && m < lo + i + 1).length,
+  }));
+}
+
+function ticks(lo: number, hi: number, count = 5) {
+  if (!(hi > lo)) return [lo];
+  const step = (hi - lo) / count;
+  return Array.from({ length: count + 1 }, (_, i) => lo + i * step);
+}
+
 function AnalysisView({
   events,
   select,
@@ -16,42 +96,23 @@ function AnalysisView({
 }) {
   const [a, setA] = useState(4),
     [b, setB] = useState(5);
-  const bins = new Map<string, number>();
-  for (const e of events) {
-    const day = new Date(e.properties.time).toISOString().slice(0, 10);
-    bins.set(day, (bins.get(day) || 0) + 1);
-  }
-  if (events.length) {
-    const min = Math.min(...events.map((e) => e.properties.time)),
-      max = Math.max(...events.map((e) => e.properties.time));
-    for (
-      let t = Math.floor(min / 86400000) * 86400000;
-      t <= max;
-      t += 86400000
-    ) {
-      const key = new Date(t).toISOString().slice(0, 10);
-      if (!bins.has(key)) bins.set(key, 0);
-    }
-  }
-  const days = [...bins].sort(),
-    peak = Math.max(1, ...bins.values());
-  const mags = Array.from({ length: 13 }, (_, i) => ({
-    label: i - 2,
-    count: events.filter(
-      (e) =>
-        e.properties.mag !== null &&
-        e.properties.mag >= i - 2 &&
-        e.properties.mag < i - 1,
-    ).length,
-  }));
+  const { bins, size } = timeBins(events);
+  const peak = Math.max(1, ...bins.map((b) => b.count));
+  // Label at most a dozen bars; hourly bins on a week of data would collide.
+  const stride = Math.ceil(bins.length / 12);
+  const mags = magnitudeBins(events);
   const mpeak = Math.max(1, ...mags.map((m) => m.count));
-  const maxDepth = Math.max(
-    100,
-    ...events.map((e) => e.geometry.coordinates[2] ?? 0),
-  );
   const points = events.filter(
     (e) => e.geometry.coordinates[2] !== null && e.properties.mag !== null,
   );
+  const depths = points.map((e) => e.geometry.coordinates[2]!),
+    magValues = points.map((e) => e.properties.mag!);
+  const maxDepth = points.length ? Math.max(10, Math.max(...depths)) : 100;
+  const magLo = points.length ? Math.floor(Math.min(...magValues) * 2) / 2 : 0,
+    magHi = points.length ? Math.ceil(Math.max(...magValues) * 2) / 2 : 6;
+  const magSpan = Math.max(0.5, magHi - magLo);
+  const plotX = (m: number) => 48 + ((m - magLo) / magSpan) * 452;
+  const plotY = (d: number) => 34 + (d / maxDepth) * 150;
   const ratio = comparison(a, b);
   const start: [number, number] = [170, -22],
     end: [number, number] = [-170, -22];
@@ -80,48 +141,71 @@ function AnalysisView({
             id="timeline-chart"
             viewBox="0 0 520 240"
             role="img"
-            aria-label={`Daily UTC counts: ${days.map((d) => d.join(": ")).join(", ")}`}
+            aria-label={`Counts per ${binName(size)}: ${bins.map((b) => `${binFull(b.start, size)}: ${b.count}`).join(", ")}`}
           >
-            <title>Earthquake observations per UTC day</title>
-            <rect width="520" height="240" fill="white" />
-            <text x="30" y="18" font-size="12">
-              USGS observations · UTC days · n={events.length}
+            <title>Earthquake observations per {binName(size)}</title>
+            <rect width="520" height="240" fill={token("--surface")} />
+            <text x="30" y="18" font-size="12" fill={token("--ink")}>
+              USGS observations · {binName(size)} · n={events.length}
             </text>
-            {days.map(([day, count], i) => (
-              <g>
-                <rect
-                  x={35 + (i * 450) / Math.max(1, days.length)}
-                  y={170 - (count / peak) * 125}
-                  width={Math.max(1, 440 / Math.max(1, days.length) - 3)}
-                  height={(count / peak) * 125}
-                  fill="#28685d"
-                />
-                <text
-                  x={35 + (i * 450) / Math.max(1, days.length)}
-                  y="188"
-                  font-size="9"
-                  transform={`rotate(30 ${35 + (i * 450) / Math.max(1, days.length)} 188)`}
-                >
-                  {day.slice(5)}
-                </text>
-                <text
-                  x={35 + (i * 450) / Math.max(1, days.length)}
-                  y={164 - (count / peak) * 125}
-                  font-size="10"
-                >
-                  {count}
-                </text>
-              </g>
-            ))}
-            <text x="12" y="228" font-size="9">
-              Daily bins [00:00, next 00:00 UTC); edge days may be partial.
+            <line
+              x1="34"
+              x2="500"
+              y1="170"
+              y2="170"
+              stroke={token("--chart-grid")}
+            />
+            {bins.map((bin, i) => {
+              const w = Math.max(1, 466 / Math.max(1, bins.length) - 2),
+                x = 35 + (i * 466) / Math.max(1, bins.length),
+                h = (bin.count / peak) * 125;
+              return (
+                <g key={bin.start}>
+                  <rect
+                    x={x}
+                    y={170 - h}
+                    width={w}
+                    height={h}
+                    fill={token("--chart-bar")}
+                  >
+                    <title>
+                      {binFull(bin.start, size)}: {bin.count}
+                    </title>
+                  </rect>
+                  {i % stride === 0 && (
+                    <text
+                      x={x}
+                      y="188"
+                      font-size="9"
+                      fill={token("--ink-muted")}
+                      transform={`rotate(30 ${x} 188)`}
+                    >
+                      {binLabel(bin.start, size)}
+                    </text>
+                  )}
+                  {bins.length <= 24 && bin.count > 0 && (
+                    <text
+                      x={x}
+                      y={164 - h}
+                      font-size="10"
+                      fill={token("--ink-muted")}
+                    >
+                      {bin.count}
+                    </text>
+                  )}
+                </g>
+              );
+            })}
+            <text x="12" y="228" font-size="9" fill={token("--ink-muted")}>
+              Bins are half-open [start, start + width); the first and last may
+              be partial.
             </text>
           </svg>
           <details>
-            <summary>Daily counts as text</summary>
-            {days.map(([d, n]) => (
-              <p>
-                {d}: {n}
+            <summary>Counts as text</summary>
+            {bins.map((bin) => (
+              <p key={bin.start}>
+                {binFull(bin.start, size)}: {bin.count}
               </p>
             ))}
           </details>
@@ -136,28 +220,48 @@ function AnalysisView({
             <title>
               Magnitude histogram; left inclusive, right exclusive bins
             </title>
-            {mags.map((m, i) => (
-              <g>
-                <rect
-                  x={30 + i * 36}
-                  y={180 - (m.count / mpeak) * 140}
-                  width="28"
-                  height={(m.count / mpeak) * 140}
-                  fill="#708f98"
-                />
-                <text x={32 + i * 36} y="199" font-size="11">
-                  {m.label}
-                </text>
-                <text
-                  x={30 + i * 36}
-                  y={174 - (m.count / mpeak) * 140}
-                  font-size="10"
-                >
-                  {m.count}
-                </text>
-              </g>
-            ))}
-            <text x="30" y="226" font-size="12">
+            <line
+              x1="28"
+              x2="500"
+              y1="180"
+              y2="180"
+              stroke={token("--chart-grid")}
+            />
+            {mags.map((m, i) => {
+              const w = Math.min(40, 460 / Math.max(1, mags.length) - 6),
+                x = 32 + (i * 460) / Math.max(1, mags.length),
+                h = (m.count / mpeak) * 140;
+              return (
+                <g key={m.label}>
+                  <rect
+                    x={x}
+                    y={180 - h}
+                    width={w}
+                    height={h}
+                    fill={token("--chart-bar-soft")}
+                  />
+                  <text
+                    x={x}
+                    y="199"
+                    font-size="11"
+                    fill={token("--ink-muted")}
+                  >
+                    {m.label}
+                  </text>
+                  {m.count > 0 && (
+                    <text
+                      x={x}
+                      y={174 - h}
+                      font-size="10"
+                      fill={token("--ink-muted")}
+                    >
+                      {m.count}
+                    </text>
+                  )}
+                </g>
+              );
+            })}
+            <text x="30" y="226" font-size="12" fill={token("--ink")}>
               Magnitude · bins [m, m+1) · mixed reported types
             </text>
           </svg>
@@ -167,19 +271,61 @@ function AnalysisView({
           <svg
             viewBox="0 0 520 240"
             role="img"
-            aria-label={`Depth versus magnitude for ${points.length} records. Depth increases downward; events are also available in the table.`}
+            aria-label={`Depth versus magnitude for ${points.length} records, magnitude ${magLo} to ${magHi}, depth 0 to ${Math.ceil(maxDepth)} kilometres. Depth increases downward; every event is also in the table.`}
           >
-            <text x="10" y="15" font-size="12">
-              Depth (km) ↓ · 0 to {Math.ceil(maxDepth)}
+            <text x="10" y="15" font-size="12" fill={token("--ink")}>
+              Depth (km) ↓ versus magnitude · n={points.length}
             </text>
+            {ticks(0, maxDepth, 4).map((d) => (
+              <g key={d}>
+                <line
+                  x1="48"
+                  x2="500"
+                  y1={plotY(d)}
+                  y2={plotY(d)}
+                  stroke={token("--chart-grid")}
+                />
+                <text
+                  x="4"
+                  y={plotY(d) + 4}
+                  font-size="9"
+                  fill={token("--ink-muted")}
+                >
+                  {Math.round(d)}
+                </text>
+              </g>
+            ))}
+            {ticks(magLo, magHi, 5).map((m) => (
+              <g key={m}>
+                <line
+                  x1={plotX(m)}
+                  x2={plotX(m)}
+                  y1="34"
+                  y2="184"
+                  stroke={token("--chart-grid")}
+                />
+                <text
+                  x={plotX(m)}
+                  y="198"
+                  font-size="9"
+                  text-anchor="middle"
+                  fill={token("--ink-muted")}
+                >
+                  {m.toFixed(1)}
+                </text>
+              </g>
+            ))}
+            {/* Deliberately unkeyed: these marks carry no identity or DOM
+                state, and keyed reconciliation of 20,000 circles costs about
+                280ms per filter change where positional diffing costs none. */}
             {points.map((e) => (
               <circle
                 onClick={() => select(e)}
-                cx={40 + ((e.properties.mag! + 2) / 12) * 440}
-                cy={35 + (e.geometry.coordinates[2]! / maxDepth) * 145}
+                cx={plotX(e.properties.mag!)}
+                cy={plotY(e.geometry.coordinates[2]!)}
                 r={selected === e.id ? 6 : 3}
                 fill={color(e.geometry.coordinates[2])}
-                stroke={selected === e.id ? "#243740" : "none"}
+                stroke={selected === e.id ? token("--ink") : "none"}
               >
                 <title>
                   {e.properties.place} · M {e.properties.mag} ·{" "}
@@ -187,8 +333,14 @@ function AnalysisView({
                 </title>
               </circle>
             ))}
-            <text x="35" y="220" font-size="12">
-              Magnitude: −2 (left) to 10 (right) · n={points.length}
+            <text
+              x="270"
+              y="220"
+              font-size="12"
+              text-anchor="middle"
+              fill={token("--ink")}
+            >
+              Magnitude →
             </text>
           </svg>
         </div>
@@ -209,15 +361,15 @@ function AnalysisView({
             role="img"
             aria-label="Tonga depth section; depth positive downward"
           >
-            <line x1="50" x2="770" y1="30" y2="30" stroke="#243740" />
+            <line x1="50" x2="770" y1="30" y2="30" stroke={token("--ink")} />
             {[0, 200, 400, 600].map((d) => (
-              <g>
+              <g key={d}>
                 <line
                   x1="50"
                   x2="770"
                   y1={30 + d * 0.3}
                   y2={30 + d * 0.3}
-                  stroke="#dbe1e3"
+                  stroke={token("--chart-grid")}
                 />
                 <text x="3" y={35 + d * 0.3} font-size="12">
                   {d} km
@@ -226,11 +378,14 @@ function AnalysisView({
             ))}
             {cross.map(({ e, along }) => (
               <circle
+                key={e.id}
                 cx={50 + (along / distance(start, end)) * 720}
                 cy={30 + e.geometry.coordinates[2]! * 0.3}
                 r={selected === e.id ? 8 : 5}
                 fill={color(e.geometry.coordinates[2])}
-                stroke={selected === e.id ? "#243740" : "white"}
+                stroke={
+                  selected === e.id ? token("--ink") : token("--marker-edge")
+                }
                 onClick={() => select(e)}
               >
                 <title>
@@ -246,7 +401,7 @@ function AnalysisView({
           <details>
             <summary>Section events — keyboard selection</summary>
             {cross.map(({ e, along }) => (
-              <button onClick={() => select(e)}>
+              <button key={e.id} onClick={() => select(e)}>
                 {e.properties.place} · {along.toFixed(0)} km along · depth{" "}
                 {e.geometry.coordinates[2]} km
               </button>

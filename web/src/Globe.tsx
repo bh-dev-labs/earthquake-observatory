@@ -6,7 +6,15 @@ import {
   geoGraticule10,
 } from "d3-geo";
 import { feature } from "topojson-client";
-import { color, radius, visible, type Event, type Region } from "./model";
+import {
+  color,
+  radius,
+  refreshPalette,
+  token,
+  visible,
+  type Event,
+  type Region,
+} from "./model";
 export type Camera = { lon: number; lat: number; zoom: number };
 type Props = {
   events: Event[];
@@ -33,7 +41,10 @@ export function Globe(p: Props) {
     [error, setError] = useState(""),
     [hover, setHover] = useState(""),
     [choices, setChoices] = useState<Event[]>([]),
-    [size, setSize] = useState([800, 600]);
+    [size, setSize] = useState([800, 600]),
+    [theme, setTheme] = useState(0),
+    [cursor, setCursor] = useState(""),
+    [spoken, setSpoken] = useState("");
   const hits = useRef<{ e: Event; x: number; y: number; r: number }[]>([]);
   const pointers = useRef(new Map<number, [number, number]>());
   const drag = useRef({ x: 0, y: 0, moved: 0, pinch: 0, multi: false });
@@ -50,12 +61,21 @@ export function Globe(p: Props) {
     platePromise
       .then(setPlates)
       .catch(() => setError("Plate overlay unavailable."));
+    const scheme = matchMedia("(prefers-color-scheme: dark)");
+    const repaint = () => {
+      refreshPalette();
+      setTheme((n) => n + 1);
+    };
+    scheme.addEventListener("change", repaint);
     const ro = new ResizeObserver((es) => {
       const r = es[0].contentRect;
       setSize([r.width, Math.min(620, Math.max(360, r.width * 0.76))]);
     });
     if (ref.current) ro.observe(ref.current.parentElement!);
-    return () => ro.disconnect();
+    return () => {
+      ro.disconnect();
+      scheme.removeEventListener("change", repaint);
+    };
   }, []);
   useEffect(() => {
     if (!p.auto || p.flat) return;
@@ -107,29 +127,29 @@ export function Globe(p: Props) {
     const path = geoPath(proj, ctx);
     ctx.beginPath();
     path({ type: "Sphere" });
-    ctx.fillStyle = "#e3eef0";
+    ctx.fillStyle = token("--globe-ocean");
     ctx.fill();
-    ctx.strokeStyle = "#b5cdd0";
+    ctx.strokeStyle = token("--globe-edge");
     ctx.stroke();
     if (earth) {
       ctx.beginPath();
       path(earth);
-      ctx.fillStyle = "#91adb0";
+      ctx.fillStyle = token("--globe-land");
       ctx.fill();
     }
     ctx.beginPath();
     path(geoGraticule10());
-    ctx.strokeStyle = "#bfd3d6";
+    ctx.strokeStyle = token("--globe-graticule");
     ctx.lineWidth = 0.55;
     ctx.stroke();
     if (p.plates && plates) {
       ctx.beginPath();
       path(plates);
-      ctx.strokeStyle = "#865c77";
+      ctx.strokeStyle = token("--plate");
       ctx.lineWidth = 1.2;
       ctx.stroke();
       ctx.font = "11px sans-serif";
-      ctx.fillStyle = "#62445b";
+      ctx.fillStyle = token("--plate-label");
       for (const [name, coord] of [
         ["Pacific", [190, 0]],
         ["North American", [-100, 45]],
@@ -165,7 +185,7 @@ export function Globe(p: Props) {
       lines.coordinates = [top, bottom, left, right];
       ctx.beginPath();
       path(lines);
-      ctx.strokeStyle = "#244f48";
+      ctx.strokeStyle = token("--accent");
       ctx.lineWidth = 2;
       ctx.setLineDash([5, 4]);
       ctx.stroke();
@@ -180,7 +200,7 @@ export function Globe(p: Props) {
           [-170, -22],
         ],
       });
-      ctx.strokeStyle = "#243740";
+      ctx.strokeStyle = token("--ink");
       ctx.lineWidth = 3;
       ctx.stroke();
       for (const lat of [-20.2, -23.8]) {
@@ -218,15 +238,24 @@ export function Globe(p: Props) {
       ctx.globalAlpha = p.selected && e.id !== p.selected ? 0.75 : 1;
       ctx.fill();
       ctx.globalAlpha = 1;
-      ctx.strokeStyle = "#fff";
+      ctx.strokeStyle = token("--marker-edge");
       ctx.lineWidth = 1;
       ctx.stroke();
       if (e.id === p.selected) {
         ctx.beginPath();
         ctx.arc(x, y, r + 5, 0, Math.PI * 2);
-        ctx.strokeStyle = "#243740";
+        ctx.strokeStyle = token("--ink");
         ctx.lineWidth = 2;
         ctx.stroke();
+      }
+      if (e.id === cursor && e.id !== p.selected) {
+        ctx.beginPath();
+        ctx.arc(x, y, r + 5, 0, Math.PI * 2);
+        ctx.strokeStyle = token("--accent");
+        ctx.setLineDash([3, 3]);
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.setLineDash([]);
       }
       hits.current.push({ e, x, y, r });
     }
@@ -241,11 +270,74 @@ export function Globe(p: Props) {
     p.region,
     p.section,
     size,
+    theme,
+    cursor,
   ]);
   const local = (e: PointerEvent) => {
     const r = ref.current!.getBoundingClientRect();
     return [e.clientX - r.left, e.clientY - r.top] as [number, number];
   };
+  const announce = (e: Event) =>
+    setSpoken(
+      `M ${e.properties.mag ?? "unknown"}, ${e.properties.place}, depth ${
+        e.geometry.coordinates[2] ?? "unknown"
+      } kilometres. Press Enter to open its details.`,
+    );
+  function step(delta: number) {
+    const drawn = hits.current;
+    if (!drawn.length) {
+      setSpoken("No earthquakes are visible on this side of Earth.");
+      return;
+    }
+    const at = drawn.findIndex((h) => h.e.id === cursor);
+    const next = drawn[(at + delta + drawn.length) % drawn.length];
+    setCursor(next.e.id);
+    announce(next.e);
+  }
+  function onKeyDown(ev: KeyboardEvent) {
+    const q = live.current;
+    const keys: Record<string, () => void> = {
+      ArrowLeft: () =>
+        q.setCamera({
+          ...q.camera,
+          lon: ((q.camera.lon - 10 + 540) % 360) - 180,
+        }),
+      ArrowRight: () =>
+        q.setCamera({
+          ...q.camera,
+          lon: ((q.camera.lon + 10 + 540) % 360) - 180,
+        }),
+      ArrowUp: () =>
+        q.setCamera({ ...q.camera, lat: Math.min(85, q.camera.lat + 10) }),
+      ArrowDown: () =>
+        q.setCamera({ ...q.camera, lat: Math.max(-85, q.camera.lat - 10) }),
+      "+": () =>
+        q.setCamera({ ...q.camera, zoom: Math.min(2.5, q.camera.zoom + 0.2) }),
+      "=": () =>
+        q.setCamera({ ...q.camera, zoom: Math.min(2.5, q.camera.zoom + 0.2) }),
+      "-": () =>
+        q.setCamera({ ...q.camera, zoom: Math.max(0.65, q.camera.zoom - 0.2) }),
+    };
+    if (keys[ev.key]) {
+      ev.preventDefault();
+      q.pause();
+      keys[ev.key]();
+      return;
+    }
+    if (ev.key === "n" || ev.key === "N") {
+      ev.preventDefault();
+      q.pause();
+      step(ev.shiftKey ? -1 : 1);
+      return;
+    }
+    if (ev.key === "Enter" || ev.key === " ") {
+      const target = hits.current.find((h) => h.e.id === cursor);
+      if (target) {
+        ev.preventDefault();
+        q.onSelect(target.e);
+      }
+    }
+  }
   const pick = (x: number, y: number) =>
     hits.current
       .filter((h) => Math.hypot(x - h.x, y - h.y) < Math.max(10, h.r + 3))
@@ -254,8 +346,9 @@ export function Globe(p: Props) {
     <div class="canvas-wrap">
       <canvas
         ref={ref}
-        aria-label="Interactive Earth. Drag to rotate; use controls to rotate or zoom with a keyboard. Select the same events in the table below."
-        role="img"
+        role="application"
+        aria-label="Interactive Earth. Arrow keys rotate, plus and minus zoom, N steps through the earthquakes in view, Enter opens the one you land on. Every event is also in the table below."
+        onKeyDown={onKeyDown}
         onPointerDown={(e) => {
           p.pause();
           setChoices([]);
@@ -340,6 +433,9 @@ export function Globe(p: Props) {
         }}
         tabIndex={0}
       />
+      <p class="sr-only" aria-live="polite">
+        {spoken}
+      </p>
       {hover && (
         <div class="hover" role="tooltip">
           {hover}
@@ -352,6 +448,7 @@ export function Globe(p: Props) {
           <button onClick={() => setChoices([])}>Close chooser</button>
           {choices.map((e) => (
             <button
+              key={e.id}
               onClick={() => {
                 p.onSelect(e);
                 setChoices([]);

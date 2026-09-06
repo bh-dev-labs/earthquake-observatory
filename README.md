@@ -71,11 +71,11 @@ Drag to rotate, pinch to zoom, or focus the canvas before using the wheel. Butto
 - USGS unavailable: an existing recent cache is returned with a stale label. Choose **Offline historical demo** if no cached data exists.
 - No events: clear filters and nearby selection, show all replay times, or use a longer period.
 - Blank geography: events remain accessible in the table. Bundled files mean no map-provider account is required.
-- Close/stop: choose **Quit observatory** in the footer, or press Ctrl+C in its terminal.
+- Close/stop: choose **Stop the local server** at the foot of the page, or press Ctrl+C in its terminal.
 
 Read [QUICKSTART](QUICKSTART.md), [operations](docs/operations.md), [scientific methods](docs/scientific-methods.md), [API](docs/api.md), [sources](docs/sources.md), and [release evidence](docs/release-readiness.md).
 
 Licensed under the [MIT License](LICENSE). Third-party licenses are recorded in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). This is an educational observatory, not an earthquake prediction or emergency warning service.
 
 
-coded by bruce.hoppe@utoronto.ca
+Built by Bruce Hoppe · [github.com/bruce-hoppe_uoft/seismic_atlas](https://github.com/bruce-hoppe_uoft/seismic_atlas)

@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+- Attribution links to the repository instead of publishing an email address, and states that the project is independent of the University of Toronto and the USGS.
+- The release string is single-sourced from `package.json` and reaches Go through `-ldflags`; an unflagged build reports `dev`.
+- Colour moved to CSS custom properties with a dark theme, and depth now uses one sequential light-to-dark ramp instead of three unrelated hues.
+- Event table sorts from its column headers with `aria-sort`, across five columns in both directions.
+- The globe accepts the keyboard: arrows rotate, +/- zoom, N steps through visible markers, Enter opens one, and each landing is announced.
+- Charts bin time by the loaded span (hourly, six-hourly or daily), trim empty magnitude bins, and draw real axes scaled to the data.
+- Interface split into memoised components so rotation no longer re-renders the table and charts sixty times a second.
+- Fixed the region preset whose displayed option cleared the region it named.
+- Fixed list reconciliation: keyed rows no longer mispair selection state when sorting or paging.
+- Stopping the server moved out of the reference links; felt-report fields collapse to one sentence when nothing was reported.
+- Saving a 20,000-event dataset is about 38% faster through prepared statements; the response cache evicts its oldest entry rather than an arbitrary one.
+
 ## 0.1.0 (2026-09-06 UTC)
 
 - Initial local Earthquake Observatory application and offline USGS snapshot.

@@ -53,9 +53,21 @@ func (s *Store) Save(query string, raw []byte) (Dataset, error) {
 		return Dataset{}, err
 	}
 	defer tx.Rollback()
+	// A 20,000-event history would otherwise re-plan the same two statements
+	// 40,000 times inside this transaction.
+	events, err := tx.Prepare(`INSERT INTO events VALUES(?,?,?) ON CONFLICT(id) DO UPDATE SET updated=excluded.updated,payload=excluded.payload WHERE excluded.updated>=events.updated`)
+	if err != nil {
+		return Dataset{}, err
+	}
+	defer events.Close()
+	members, err := tx.Prepare(`INSERT OR IGNORE INTO members VALUES(?,?)`)
+	if err != nil {
+		return Dataset{}, err
+	}
+	defer members.Close()
 	for _, e := range c.Features {
 		b, _ := json.Marshal(e)
-		if _, err = tx.Exec(`INSERT INTO events VALUES(?,?,?) ON CONFLICT(id) DO UPDATE SET updated=excluded.updated,payload=excluded.payload WHERE excluded.updated>=events.updated`, e.ID, e.Properties.Updated, b); err != nil {
+		if _, err = events.Exec(e.ID, e.Properties.Updated, b); err != nil {
 			return Dataset{}, err
 		}
 	}
@@ -63,7 +75,7 @@ func (s *Store) Save(query string, raw []byte) (Dataset, error) {
 		return Dataset{}, err
 	}
 	for _, e := range c.Features {
-		if _, err = tx.Exec(`INSERT OR IGNORE INTO members VALUES(?,?)`, id, e.ID); err != nil {
+		if _, err = members.Exec(id, e.ID); err != nil {
 			return Dataset{}, err
 		}
 	}

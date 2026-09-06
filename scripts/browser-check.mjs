@@ -68,7 +68,7 @@ await page
 if (
   !(await page
     .getByRole("link", {
-      name: "coded by bruce.hoppe@utoronto.ca",
+      name: "Built by Bruce Hoppe · Source on GitHub",
       exact: true,
     })
     .isVisible())
@@ -78,15 +78,18 @@ const axe = await new AxeBuilder({ page }).analyze();
 await fs.writeFile(
   "docs/accessibility-results.json",
   JSON.stringify(
-    axe.violations.map((v) => ({
-      id: v.id,
-      impact: v.impact,
-      description: v.description,
-      nodes: v.nodes.map((n) => ({
-        target: n.target,
-        summary: n.failureSummary,
+    {
+      generated: new Date().toISOString(),
+      violations: axe.violations.map((v) => ({
+        id: v.id,
+        impact: v.impact,
+        description: v.description,
+        nodes: v.nodes.map((n) => ({
+          target: n.target,
+          summary: n.failureSummary,
+        })),
       })),
-    })),
+    },
     null,
     2,
   ),

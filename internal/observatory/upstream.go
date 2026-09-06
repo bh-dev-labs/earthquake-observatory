@@ -91,10 +91,15 @@ func (s *Service) Fetch(ctx context.Context, u string) ([]byte, error) {
 				if json.Valid(b) {
 					s.cacheMu.Lock()
 					if len(s.responses) >= 32 {
-						for key := range s.responses {
-							delete(s.responses, key)
-							break
+						// Evict the least recently fetched entry rather than an
+						// arbitrary one, so a busy detail view keeps its cache.
+						oldest, found := "", time.Time{}
+						for key, entry := range s.responses {
+							if found.IsZero() || entry.fetched.Before(found) {
+								oldest, found = key, entry.fetched
+							}
 						}
+						delete(s.responses, oldest)
 					}
 					s.responses[u] = responseCache{b, res.Header.Get("ETag"), res.Header.Get("Last-Modified"), time.Now()}
 					s.cacheMu.Unlock()

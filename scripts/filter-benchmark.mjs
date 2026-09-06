@@ -22,6 +22,7 @@ const result = {
   runtime: process.version,
   platform: process.platform,
   arch: process.arch,
+  generated: new Date().toISOString(),
 };
 await fs.writeFile(
   "docs/filter-benchmark.json",

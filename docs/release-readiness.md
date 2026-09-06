@@ -25,7 +25,7 @@ Host: macOS arm64, Go 1.27.1, Node 26.8.1, headless Chromium 153.0.8010.12. Veri
 | Performance | 20,000 synthetic events: filtering p95 ≈0.85 ms in Node (100 measured iterations). Chromium rotation ≈37.5 fps; browser filter interactions ≈136–180 ms including test overhead in the initial measured run. Final run: 37.18 fps, 133–173 ms interactions; heap after ten view switches 624 MB (unforced GC, not a leak determination). Raw measurements in `extended-test-results.json`. |
 | Dependency vulnerabilities | `npm audit` reports zero; `go run golang.org/x/vuln/cmd/govulncheck@latest ./...` reports no vulnerabilities. Scan results are time-specific. |
 | Packaging | macOS arm64, macOS amd64 and Windows amd64 cross-builds succeeded. Extracted macOS arm64 archive passed startup, embedded assets, demo, running backup, restart, clean-directory restore and integrity checks; see `consumer-test-results.json`. Native macOS Launch Services launch, live-mode configuration and ad-hoc signature verification also passed. Windows and Intel execution remain unverified. |
-| Attribution/license | Exact credit `coded by bruce.hoppe@utoronto.ca` in production footer and About; browser check asserts footer visibility. README, QUICKSTART, MIT LICENSE and third-party notices included in archives. |
+| Attribution/license | Credit `Built by Bruce Hoppe · Source on GitHub` links to the repository in the production footer and About panel, with no address published in the interface; browser check asserts footer visibility. README, QUICKSTART, MIT LICENSE and third-party notices included in archives. |
 | CI | Workflow configured for Linux/macOS/Windows; no hosted CI run is claimed. |
 
 ## Remaining publication gates and deliberate operating limits

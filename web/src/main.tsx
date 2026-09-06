@@ -8,6 +8,12 @@ import {
 } from "preact/hooks";
 import { Globe, type Camera } from "./Globe";
 import { Analysis } from "./Analysis";
+import { EventTable } from "./EventTable";
+import { SelectedEvent } from "./SelectedEvent";
+import { Replay } from "./Replay";
+import { ActivityAreas } from "./ActivityAreas";
+import { EarthPanel } from "./EarthPanel";
+import { useStable } from "./hooks";
 import { sources, glossary, lessons } from "./content";
 import {
   areaGroups,
@@ -25,6 +31,7 @@ import {
 } from "./model";
 import "./style.css";
 const repository = "https://github.com/bruce-hoppe_uoft/seismic_atlas";
+type SortKey = "mag" | "place" | "depth" | "time" | "status";
 const fmt = (v: number | null | undefined, digits = 1) =>
   v == null ? "Unavailable" : v.toFixed(digits);
 const utc = (t: number) =>
@@ -72,7 +79,8 @@ function App() {
     [lesson, setLesson] = useState(-1),
     [step, setStep] = useState(0),
     [section, setSection] = useState(false),
-    [sort, setSort] = useState("time"),
+    [sort, setSort] = useState<SortKey>("time"),
+    [descending, setDescending] = useState(true),
     [page, setPage] = useState(0),
     [start, setStart] = useState("2023-02-06"),
     [end, setEnd] = useState("2023-02-13"),
@@ -280,18 +288,35 @@ function App() {
       );
     return result;
   }, [all, filters, cursor, near, selected, nearRadius, nearHours]);
-  const ordered = useMemo(
-    () =>
-      [...filtered].sort((a, b) =>
-        sort === "mag"
-          ? (b.properties.mag ?? -Infinity) - (a.properties.mag ?? -Infinity)
-          : sort === "depth"
-            ? (a.geometry.coordinates[2] ?? Infinity) -
-              (b.geometry.coordinates[2] ?? Infinity)
-            : b.properties.time - a.properties.time,
-      ),
-    [filtered, sort],
-  );
+  const ordered = useMemo(() => {
+    const direction = descending ? -1 : 1;
+    const value = (e: Event) =>
+      sort === "mag"
+        ? (e.properties.mag ?? -Infinity)
+        : sort === "depth"
+          ? (e.geometry.coordinates[2] ?? Infinity)
+          : sort === "place"
+            ? e.properties.place || ""
+            : sort === "status"
+              ? e.properties.status || ""
+              : e.properties.time;
+    return [...filtered].sort((a, b) => {
+      const x = value(a),
+        y = value(b);
+      return typeof x === "string" || typeof y === "string"
+        ? direction * String(x).localeCompare(String(y))
+        : direction * (x - y);
+    });
+  }, [filtered, sort, descending]);
+  // Each column opens in the direction people expect to read it first.
+  function sortBy(key: SortKey) {
+    if (key === sort) setDescending(!descending);
+    else {
+      setSort(key);
+      setDescending(key === "time" || key === "mag");
+    }
+    setPage(0);
+  }
   const areas = useMemo(
     () =>
       areaGroups(filterEvents(all, { ...filters, region: null }, cursor)).slice(
@@ -300,6 +325,13 @@ function App() {
       ),
     [all, filters, cursor],
   );
+  const reported =
+    !!selected &&
+    (selected.properties.felt != null ||
+      selected.properties.cdi != null ||
+      selected.properties.mmi != null);
+  const custom =
+    !!filters.region && !regions.some((r) => r.name === filters.region!.name);
   const times = useMemo(() => all.map((e) => e.properties.time), [all]),
     lo = times.length ? Math.min(...times) : 0,
     hi = times.length ? Math.max(...times) : 1;
@@ -339,9 +371,73 @@ function App() {
     document.addEventListener("keydown", fn);
     return () => document.removeEventListener("keydown", fn);
   }, []);
-  const chooseRef = useRef(choose);
-  chooseRef.current = choose;
-  const stableChoose = useMemo(() => (e: Event) => chooseRef.current(e), []);
+  const stableChoose = useStable((e: Event) => choose(e));
+  const stableClose = useStable(() => closeSelection());
+  const stablePause = useStable(() => pause());
+  const stableToggleAuto = useStable(() => toggleAuto());
+  const clearRegion = useStable(() => {
+    change("region", null);
+    setNear(false);
+  });
+  const stableShare = useStable(() => share());
+  const stableGetDetail = useStable((e: Event) => getDetail(e));
+  const centreOnSelection = useStable(() => {
+    if (!selected) return;
+    pause();
+    setCamera({
+      ...camera,
+      lon: selected.geometry.coordinates[0],
+      lat: selected.geometry.coordinates[1],
+    });
+  });
+  const stableChange = useStable((key: keyof Filters, value: any) =>
+    change(key, value),
+  );
+  const stableFocusRegion = useStable((r: Region) => focusRegion(r));
+  const stableSortBy = useStable((key: SortKey) => sortBy(key));
+  const stableDisplayTime = useStable((t: number) => displayTime(t));
+  const stableExport = useStable((kind: string) => exportData(kind));
+  const importSnapshot = useStable(async (file: File) => {
+    try {
+      if (file.size > 40 * 1024 * 1024) throw Error("Snapshot exceeds 40 MiB");
+      const d = JSON.parse(await file.text());
+      if (
+        d.type !== "FeatureCollection" ||
+        !Array.isArray(d.features) ||
+        d.features.length > 50000 ||
+        !d.features.every(
+          (e: any) =>
+            typeof e.id === "string" &&
+            e.geometry?.type === "Point" &&
+            e.geometry.coordinates?.length === 3 &&
+            e.geometry.coordinates.slice(0, 2).every(Number.isFinite) &&
+            Math.abs(e.geometry.coordinates[0]) <= 180 &&
+            Math.abs(e.geometry.coordinates[1]) <= 90 &&
+            Number.isFinite(e.properties?.time) &&
+            typeof e.properties?.place === "string",
+        )
+      )
+        throw Error("Invalid snapshot");
+      pause();
+      setDataset({
+        id: d.metadata?.dataset || "imported",
+        query: d.metadata?.query || "Imported snapshot",
+        fetched: d.metadata?.retrieved || new Date().toISOString(),
+        complete: !!d.metadata?.complete,
+        stale: false,
+        data: d,
+      });
+      setMode("history");
+      setFilters({ ...defaults });
+      setCursor(Infinity);
+      setSelected(null);
+      setMessage(
+        "Snapshot reopened locally. No upstream retrieval was needed.",
+      );
+    } catch (err: any) {
+      setError(err.message);
+    }
+  });
   function closeSelection() {
     selectionToken.current++;
     setSelected(null);
@@ -462,7 +558,7 @@ function App() {
       .map((x) => x.toString(16).padStart(2, "0"))
       .join("");
     const meta = {
-      version: "0.1.0",
+      version,
       source: "USGS",
       dataset: dataset.id,
       query: dataset.query,
@@ -598,7 +694,7 @@ function App() {
           timeStyle: "long",
           timeZone: zone,
         }).format(t);
-  const products = detail?.properties?.products || {};
+  const products = useMemo(() => detail?.properties?.products || {}, [detail]);
   return (
     <>
       <a href="#events" class="skip">
@@ -663,29 +759,33 @@ function App() {
               <option value="demo">Offline historical demo</option>
             </select>
           </label>
-          <label>
-            Magnitude ≥{" "}
-            <input
-              type="number"
-              min="-2"
-              max="10"
-              step="0.1"
-              placeholder="Any"
-              value={filters.min}
-              onInput={(e) => change("min", e.currentTarget.value)}
-            />
-          </label>
-          <label>
-            ≤{" "}
-            <input
-              aria-label="Maximum magnitude"
-              type="number"
-              step="0.1"
-              placeholder="Any"
-              value={filters.max}
-              onInput={(e) => change("max", e.currentTarget.value)}
-            />
-          </label>
+          <div class="range-field" role="group" aria-label="Magnitude range">
+            <span class="range-label">Magnitude</span>
+            <label>
+              from{" "}
+              <input
+                type="number"
+                min="-2"
+                max="10"
+                step="0.1"
+                placeholder="Any"
+                value={filters.min}
+                onInput={(e) => change("min", e.currentTarget.value)}
+              />
+            </label>
+            <label>
+              to{" "}
+              <input
+                type="number"
+                min="-2"
+                max="10"
+                step="0.1"
+                placeholder="Any"
+                value={filters.max}
+                onInput={(e) => change("max", e.currentTarget.value)}
+              />
+            </label>
+          </div>
           <button
             onClick={() => load(mode)}
             disabled={busy || mode === "history" || lesson >= 0}
@@ -785,7 +885,9 @@ function App() {
                 </p>
                 <div class="lesson-grid">
                   {lessons.map((l, i) => (
-                    <button onClick={() => startLesson(i)}>{l.title}</button>
+                    <button key={l.title} onClick={() => startLesson(i)}>
+                      {l.title}
+                    </button>
                   ))}
                 </div>
               </>
@@ -844,362 +946,51 @@ function App() {
           </section>
         )}
         <section class="observatory">
-          <div class="earth-panel">
-            <div class="earth-heading">
-              <h2>{flat ? "Earth · flat map" : "Earth · globe"}</h2>
-              <span>Drag to rotate · Tap an event</span>
-              <button
-                onClick={() => {
-                  pause();
-                  setFlat(!flat);
-                }}
-              >
-                {flat ? "3D globe" : "2D map"}
-              </button>
-            </div>
-            <Globe
-              events={filtered}
-              selected={selected?.id || ""}
-              onSelect={stableChoose}
-              camera={camera}
-              setCamera={setCamera}
-              flat={flat}
-              plates={plates}
-              region={filters.region}
-              section={section}
-              auto={auto}
-              speed={speed}
-              pause={pause}
-            />
-            <div class="globe-controls">
-              <button
-                aria-label="Rotate left"
-                onClick={() => {
-                  pause();
-                  setCamera({
-                    ...camera,
-                    lon: ((camera.lon - 20 + 540) % 360) - 180,
-                  });
-                }}
-              >
-                ←
-              </button>
-              <button
-                aria-label="Rotate up"
-                onClick={() => {
-                  pause();
-                  setCamera({ ...camera, lat: Math.min(85, camera.lat + 15) });
-                }}
-              >
-                ↑
-              </button>
-              <button
-                onClick={() => {
-                  pause();
-                  setCamera({ lon: 150, lat: 15, zoom: 1 });
-                }}
-              >
-                Reset view
-              </button>
-              <button
-                aria-label="Rotate down"
-                onClick={() => {
-                  pause();
-                  setCamera({ ...camera, lat: Math.max(-85, camera.lat - 15) });
-                }}
-              >
-                ↓
-              </button>
-              <button
-                aria-label="Rotate right"
-                onClick={() => {
-                  pause();
-                  setCamera({
-                    ...camera,
-                    lon: ((camera.lon + 20 + 540) % 360) - 180,
-                  });
-                }}
-              >
-                →
-              </button>
-              <button
-                aria-label="Zoom in"
-                onClick={() => {
-                  pause();
-                  setCamera({
-                    ...camera,
-                    zoom: Math.min(2.5, camera.zoom + 0.2),
-                  });
-                }}
-              >
-                ＋
-              </button>
-              <button
-                aria-label="Zoom out"
-                onClick={() => {
-                  pause();
-                  setCamera({
-                    ...camera,
-                    zoom: Math.max(0.65, camera.zoom - 0.2),
-                  });
-                }}
-              >
-                −
-              </button>
-            </div>
-            <div class="globe-controls">
-              <button aria-pressed={auto} onClick={toggleAuto}>
-                {auto
-                  ? "Auto-rotate: on"
-                  : autoWanted
-                    ? "Resume rotation"
-                    : "Auto-rotate: off"}
-              </button>
-              <label>
-                Speed{" "}
-                <select
-                  value={speed}
-                  onChange={(e) => setSpeed(+e.currentTarget.value)}
-                >
-                  <option value="0.5">½×</option>
-                  <option value="1">1×</option>
-                  <option value="2">2×</option>
-                </select>
-              </label>
-              <label>
-                <input
-                  type="checkbox"
-                  checked={plates}
-                  onChange={(e) => setPlates(e.currentTarget.checked)}
-                />{" "}
-                Plate boundaries
-              </label>
-            </div>
-            <p class="legend">
-              <span>
-                <i style={{ background: color(0) }} />
-                Shallow &lt;70 km
-              </span>
-              <span>
-                <i style={{ background: color(100) }} />
-                70–300 km
-              </span>
-              <span>
-                <i style={{ background: color(400) }} />
-                Deep ≥300 km
-              </span>
-            </p>
-            <p class="map-credit">
-              Natural Earth ·{" "}
-              {plates
-                ? "PB2002: Bird / Ahlenius / Nordpil, ODC-BY · simplified boundaries"
-                : "Surface epicentres; colour shows source depth"}
-              <br />
-              Marker radius: 3 + 1.35 × magnitude, clamped 3–13 px. Focus globe
-              to wheel-zoom. North stays up.
-            </p>
-          </div>
+          <EarthPanel
+            events={filtered}
+            selectedId={selected?.id || ""}
+            onSelect={stableChoose}
+            camera={camera}
+            setCamera={setCamera}
+            flat={flat}
+            setFlat={setFlat}
+            plates={plates}
+            setPlates={setPlates}
+            region={filters.region}
+            section={section}
+            auto={auto}
+            autoWanted={autoWanted}
+            toggleAuto={stableToggleAuto}
+            speed={speed}
+            setSpeed={setSpeed}
+            pause={stablePause}
+          />
           <aside class="details" aria-label="Earthquake information">
             {selected ? (
-              <>
-                <div class="detail-top">
-                  <span>Selected earthquake</span>
-                  <button
-                    onClick={closeSelection}
-                    aria-label="Close event details"
-                  >
-                    ×
-                  </button>
-                </div>
-                <h2 class="magnitude" ref={detailHeading} tabIndex={-1}>
-                  {fmt(selected.properties.mag)}{" "}
-                  <small>
-                    {selected.properties.magType ||
-                      "Magnitude type unavailable"}
-                  </small>
-                </h2>
-                <h3>
-                  {selected.properties.place ||
-                    "Location description unavailable"}
-                </h3>
-                <p class="selection-note">
-                  ●{" "}
-                  {filtered.some((e) => e.id === selected.id)
-                    ? "Selected on globe"
-                    : "Outside current filters, replay time or dataset"}
-                </p>
-                <dl>
-                  <div>
-                    <dt>Depth</dt>
-                    <dd>{fmt(selected.geometry.coordinates[2])} km</dd>
-                  </div>
-                  <div>
-                    <dt>Review status</dt>
-                    <dd>{selected.properties.status || "Unavailable"}</dd>
-                  </div>
-                  <div class="wide">
-                    <dt>Event time · {zone}</dt>
-                    <dd>{displayTime(selected.properties.time)}</dd>
-                  </div>
-                  <div>
-                    <dt>Latitude</dt>
-                    <dd>{fmt(selected.geometry.coordinates[1], 3)}°</dd>
-                  </div>
-                  <div>
-                    <dt>Longitude</dt>
-                    <dd>{fmt(selected.geometry.coordinates[0], 3)}°</dd>
-                  </div>
-                </dl>
-                <hr />
-                <h3>What am I looking at?</h3>
-                <p>
-                  {selected.properties.status === "deleted" && (
-                    <strong>USGS marks this event deleted. </strong>
-                  )}
-                  The marker shows the surface location above the earthquake.
-                  Its colour represents source depth. Magnitude describes source
-                  size, not shaking at your location.
-                </p>
-                <button onClick={() => setTextPage("Glossary")}>
-                  Explain depth & magnitude
-                </button>
-                <details open>
-                  <summary>Available observations</summary>
-                  <p>
-                    Felt reports: {selected.properties.felt ?? "Unavailable"}
-                    <br />
-                    Reported intensity (CDI):{" "}
-                    {selected.properties.cdi ?? "Unavailable"}
-                    <br />
-                    Maximum modelled intensity (MMI):{" "}
-                    {selected.properties.mmi ?? "Unavailable"}
-                  </p>
-                  <p class="muted">
-                    Report counts are not population affected. Intensity values
-                    are not a shaking map.
-                  </p>
-                  {detailBusy && <p>Loading additional product links…</p>}
-                  {detailError && (
-                    <p>
-                      {detailError}{" "}
-                      <button onClick={() => getDetail(selected)}>
-                        Retry details
-                      </button>
-                    </p>
-                  )}
-                  {Object.entries(products)
-                    .filter(([key]) =>
-                      [
-                        "shakemap",
-                        "dyfi",
-                        "losspager",
-                        "moment-tensor",
-                        "origin",
-                      ].includes(key),
-                    )
-                    .map(([key, entries]) => (
-                      <p>
-                        <a
-                          href={
-                            safeURL(selected.properties.url) +
-                            "/" +
-                            (key === "losspager" ? "pager" : key)
-                          }
-                          target="_blank"
-                          rel="noreferrer"
-                        >
-                          {key === "dyfi"
-                            ? "Did You Feel It? — felt reports"
-                            : key === "shakemap"
-                              ? "ShakeMap — modelled shaking"
-                              : key === "losspager"
-                                ? "PAGER — impact estimates"
-                                : key + " — USGS product"}
-                        </a>
-                      </p>
-                    ))}
-                  {detail && !Object.keys(products).length && (
-                    <p>No additional products were returned.</p>
-                  )}
-                </details>
-                <details>
-                  <summary>Source & freshness</summary>
-                  <p>
-                    Event ID: {selected.id}
-                    <br />
-                    Network: {selected.properties.net || "Unavailable"}
-                    <br />
-                    Source updated: {utc(selected.properties.updated)}
-                    <br />
-                    App retrieved: {dataset?.fetched}
-                  </p>
-                </details>
-                {safeURL(selected.properties.url) && (
-                  <a
-                    class="source-link"
-                    href={safeURL(selected.properties.url)}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    Open original USGS event ↗
-                  </a>
-                )}
-                <div class="button-row">
-                  <button
-                    onClick={() => {
-                      pause();
-                      setCamera({
-                        ...camera,
-                        lon: selected.geometry.coordinates[0],
-                        lat: selected.geometry.coordinates[1],
-                      });
-                    }}
-                  >
-                    Centre globe
-                  </button>
-                  <button onClick={share}>Copy event link</button>
-                </div>
-                <details>
-                  <summary>Nearby observations</summary>
-                  <label>
-                    Radius (km){" "}
-                    <input
-                      type="number"
-                      value={nearRadius}
-                      min="1"
-                      max="20000"
-                      onInput={(e) =>
-                        setNearRadius(
-                          Math.max(1, Math.min(20000, +e.currentTarget.value)),
-                        )
-                      }
-                    />
-                  </label>
-                  <label>
-                    Time ± hours{" "}
-                    <input
-                      type="number"
-                      value={nearHours}
-                      min="1"
-                      max="744"
-                      onInput={(e) =>
-                        setNearHours(
-                          Math.max(1, Math.min(744, +e.currentTarget.value)),
-                        )
-                      }
-                    />
-                  </label>
-                  <button onClick={() => setNear(!near)}>
-                    {near
-                      ? "Clear nearby filter"
-                      : "Show nearby in loaded dataset"}
-                  </button>
-                  <p>
-                    Uses the loaded dataset and current filters. Nearby does not
-                    imply an aftershock relationship.
-                  </p>
-                </details>
-              </>
+              <SelectedEvent
+                selected={selected}
+                inView={filtered.some((e) => e.id === selected.id)}
+                zone={zone}
+                displayTime={stableDisplayTime}
+                closeSelection={stableClose}
+                detailHeading={detailHeading}
+                setTextPage={setTextPage}
+                reported={reported}
+                detailBusy={detailBusy}
+                detailError={detailError}
+                getDetail={stableGetDetail}
+                products={products}
+                detailLoaded={!!detail}
+                fetched={dataset?.fetched || ""}
+                centreOnSelection={centreOnSelection}
+                share={stableShare}
+                near={near}
+                setNear={setNear}
+                nearRadius={nearRadius}
+                setNearRadius={setNearRadius}
+                nearHours={nearHours}
+                setNearHours={setNearHours}
+              />
             ) : (
               <>
                 <p class="eyebrow">Explore the observations</p>
@@ -1218,8 +1009,9 @@ function App() {
                 </div>
                 <h3>A moving planet, carefully observed</h3>
                 <p>
-                  Gold markers are shallower than 70 km. Teal and purple show
-                  progressively deeper earthquakes.
+                  Marker colour follows one scale from light to dark: the palest
+                  markers are shallower than 70 km, the darkest are deeper than
+                  300 km.
                 </p>
                 <p>
                   The globe shows epicentres. Rotating Earth changes your
@@ -1238,391 +1030,50 @@ function App() {
             )}
           </aside>
         </section>
-        <section class="replay">
-          <div class="section-heading">
-            <h2>
-              Replay the{" "}
-              {mode === "demo" ? "historical week" : "loaded observations"}
-            </h2>
-            <span>
-              {Number.isFinite(cursor)
-                ? displayTime(cursor)
-                : "All loaded events"}
-            </span>
-          </div>
-          <div class="replay-line">
-            <button
-              disabled={!all.length}
-              onClick={() => {
-                setAuto(false);
-                if (!playing && (!Number.isFinite(cursor) || cursor >= hi))
-                  setCursor(lo);
-                setPlaying(!playing);
-              }}
-            >
-              {playing ? "Pause" : "Play"}
-            </button>
-            <button
-              disabled={!all.length}
-              onClick={() => {
-                setPlaying(false);
-                setCursor(lo);
-              }}
-            >
-              Restart
-            </button>
-            <input
-              aria-label="Replay time"
-              type="range"
-              min={lo}
-              max={hi}
-              step="1"
-              value={Number.isFinite(cursor) ? cursor : hi}
-              onInput={(e) => {
-                setPlaying(false);
-                setCursor(+e.currentTarget.value);
-              }}
-            />
-            <label>
-              Replay speed{" "}
-              <select
-                value={replaySpeed}
-                onChange={(e) => setReplaySpeed(+e.currentTarget.value)}
-              >
-                <option value="0.5">½×</option>
-                <option value="1">1×</option>
-                <option value="4">4×</option>
-              </select>
-            </label>
-            <button
-              onClick={() => {
-                setPlaying(false);
-                setCursor(Infinity);
-              }}
-            >
-              Show all
-            </button>
-          </div>
-          <p class="muted">
-            Cumulative display through the cursor · {lo ? utc(lo) : "No events"}{" "}
-            — {hi > 1 ? utc(hi) : ""}. All views and exports follow this cursor.
-            Playback is a sequence of observations, not wave travel.
-          </p>
-        </section>
-        <section class="activity">
-          <div class="section-heading">
-            <h2>
-              {mode === "demo" || mode === "history"
-                ? "Activity in this historical dataset"
-                : "Current areas of activity"}
-            </h2>
-            <button
-              onClick={() => {
-                change("region", null);
-                setNear(false);
-              }}
-            >
-              Show all areas
-            </button>
-          </div>
-          <p class="muted">
-            Most populated 20° geographic cells in the loaded observations,
-            after magnitude, depth, text and replay filters. Select one to focus
-            and filter Earth. Counts describe recorded activity, not hazard.
-          </p>
-          <div class="area-grid">
-            {areas.map(({ region: r, events }) => (
-              <button
-                class={
-                  filters.region?.name === r.name ? "area selected" : "area"
-                }
-                onClick={() => focusRegion(r)}
-              >
-                <strong>{r.name}</strong>
-                <span>{events.length} observations</span>
-                <small>
-                  Largest M{" "}
-                  {events.some((e) => e.properties.mag !== null)
-                    ? fmt(
-                        Math.max(
-                          ...events.map((e) => e.properties.mag ?? -Infinity),
-                        ),
-                      )
-                    : "Unavailable"}{" "}
-                  · {events[0]?.properties.place}
-                </small>
-              </button>
-            ))}
-          </div>
-          {!areas.length && (
-            <p>
-              No areas match these filters. Clear filters or choose a longer
-              period.
-            </p>
-          )}
-        </section>
-        <section id="events" class="events">
-          <div class="section-heading">
-            <h2>
-              Event explorer <span class="count">{filtered.length}</span>
-            </h2>
-            <label>
-              Display time zone{" "}
-              <select
-                value={zone}
-                onChange={(e) => setZone(e.currentTarget.value)}
-              >
-                <option value="UTC">UTC</option>
-                <option
-                  value={Intl.DateTimeFormat().resolvedOptions().timeZone}
-                >
-                  Local ({Intl.DateTimeFormat().resolvedOptions().timeZone})
-                </option>
-              </select>
-            </label>
-          </div>
-          <div class="table-filters">
-            <label>
-              Search loaded descriptions{" "}
-              <input
-                type="search"
-                placeholder="e.g. Japan"
-                value={filters.text}
-                onInput={(e) => change("text", e.currentTarget.value)}
-              />
-            </label>
-            <label>
-              Depth ≥ km{" "}
-              <input
-                type="number"
-                placeholder="Any"
-                value={filters.depthMin}
-                onInput={(e) => change("depthMin", e.currentTarget.value)}
-              />
-            </label>
-            <label>
-              ≤ km{" "}
-              <input
-                type="number"
-                placeholder="Any"
-                value={filters.depthMax}
-                onInput={(e) => change("depthMax", e.currentTarget.value)}
-              />
-            </label>
-            <label>
-              Region preset{" "}
-              <select
-                value={regions.findIndex(
-                  (r) => r.name === filters.region?.name,
-                )}
-                onChange={(e) => {
-                  const i = +e.currentTarget.value;
-                  i < 0 ? change("region", null) : focusRegion(regions[i]);
-                }}
-              >
-                <option value="-1">
-                  {filters.region ? filters.region.name : "Global"}
-                </option>
-                {regions.map((r, i) => (
-                  <option value={i}>{r.name}</option>
-                ))}
-              </select>
-            </label>
-            <label>
-              Sort{" "}
-              <select
-                value={sort}
-                onChange={(e) => {
-                  setSort(e.currentTarget.value);
-                  setPage(0);
-                }}
-              >
-                <option value="time">Newest first</option>
-                <option value="mag">Largest magnitude</option>
-                <option value="depth">Shallowest first</option>
-              </select>
-            </label>
-            <button
-              onClick={() => {
-                setFilters({ ...defaults });
-                setNear(false);
-              }}
-            >
-              Clear filters
-            </button>
-          </div>
-          <details>
-            <summary>
-              Explicit geographic bounds{" "}
-              {filters.region ? "— " + filters.region.name : ""}
-            </summary>
-            <p>
-              Longitude west greater than east crosses the date line. Panning
-              never changes this filter.
-            </p>
-            <div class="button-row">
-              {(["west", "east", "south", "north"] as const).map((key) => (
-                <label>
-                  {key}{" "}
-                  <input
-                    type="number"
-                    min={key === "west" || key === "east" ? -180 : -90}
-                    max={key === "west" || key === "east" ? 180 : 90}
-                    value={
-                      filters.region?.[key] ??
-                      { west: -180, east: 180, south: -90, north: 90 }[key]
-                    }
-                    onChange={(e) => {
-                      const limit = key === "west" || key === "east" ? 180 : 90;
-                      change("region", {
-                        ...(filters.region || {
-                          name: "Custom bounds",
-                          west: -180,
-                          east: 180,
-                          south: -90,
-                          north: 90,
-                        }),
-                        name: "Custom bounds",
-                        [key]: Math.max(
-                          -limit,
-                          Math.min(limit, +e.currentTarget.value),
-                        ),
-                      });
-                    }}
-                  />
-                </label>
-              ))}
-            </div>
-          </details>
-          {filters.region && (
-            <p class="filter-note">
-              Region filter: {filters.region.name} · W {filters.region.west}°, E{" "}
-              {filters.region.east}°, S {filters.region.south}°, N{" "}
-              {filters.region.north}°{" "}
-              <button onClick={() => change("region", null)}>
-                Clear region
-              </button>
-            </p>
-          )}
-          <div class="table-wrap">
-            <table>
-              <caption class="sr-only">
-                Earthquakes matching all active filters and replay time
-              </caption>
-              <thead>
-                <tr>
-                  <th>Magnitude / type</th>
-                  <th>Location</th>
-                  <th>Depth</th>
-                  <th>Time · {zone}</th>
-                  <th>Review</th>
-                </tr>
-              </thead>
-              <tbody>
-                {ordered.slice(page * 40, page * 40 + 40).map((e) => (
-                  <tr class={selected?.id === e.id ? "selected" : ""}>
-                    <td>
-                      <span
-                        class="dot"
-                        style={{ background: color(e.geometry.coordinates[2]) }}
-                      />
-                      {fmt(e.properties.mag)}{" "}
-                      <small>{e.properties.magType}</small>
-                    </td>
-                    <td>
-                      <button class="event-link" onClick={() => choose(e)}>
-                        {e.properties.place || e.id}
-                      </button>
-                    </td>
-                    <td>{fmt(e.geometry.coordinates[2])} km</td>
-                    <td>{displayTime(e.properties.time)}</td>
-                    <td>{e.properties.status}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          {!filtered.length && (
-            <p>
-              No matching observations. Try clearing the region, search or
-              magnitude filters.
-            </p>
-          )}
-          <div class="pagination">
-            <button disabled={page === 0} onClick={() => setPage(page - 1)}>
-              Previous
-            </button>
-            <span>
-              Page {page + 1} of {Math.max(1, Math.ceil(filtered.length / 40))}
-            </span>
-            <button
-              disabled={(page + 1) * 40 >= filtered.length}
-              onClick={() => setPage(page + 1)}
-            >
-              Next
-            </button>
-            <button disabled={!dataset} onClick={() => exportData("csv")}>
-              Export CSV + metadata
-            </button>
-            <button disabled={!dataset} onClick={() => exportData("json")}>
-              Export GeoJSON snapshot
-            </button>
-            <label class="import">
-              Reopen snapshot{" "}
-              <input
-                type="file"
-                accept=".json,.geojson"
-                onChange={async (e) => {
-                  try {
-                    const file = e.currentTarget.files?.[0];
-                    if (!file) return;
-                    if (file.size > 40 * 1024 * 1024)
-                      throw Error("Snapshot exceeds 40 MiB");
-                    const d = JSON.parse(await file.text());
-                    if (
-                      d.type !== "FeatureCollection" ||
-                      !Array.isArray(d.features) ||
-                      d.features.length > 50000 ||
-                      !d.features.every(
-                        (e: any) =>
-                          typeof e.id === "string" &&
-                          e.geometry?.type === "Point" &&
-                          e.geometry.coordinates?.length === 3 &&
-                          e.geometry.coordinates
-                            .slice(0, 2)
-                            .every(Number.isFinite) &&
-                          Math.abs(e.geometry.coordinates[0]) <= 180 &&
-                          Math.abs(e.geometry.coordinates[1]) <= 90 &&
-                          Number.isFinite(e.properties?.time) &&
-                          typeof e.properties?.place === "string",
-                      )
-                    )
-                      throw Error("Invalid snapshot");
-                    pause();
-                    setDataset({
-                      id: d.metadata?.dataset || "imported",
-                      query: d.metadata?.query || "Imported snapshot",
-                      fetched:
-                        d.metadata?.retrieved || new Date().toISOString(),
-                      complete: !!d.metadata?.complete,
-                      stale: false,
-                      data: d,
-                    });
-                    setMode("history");
-                    setFilters({ ...defaults });
-                    setCursor(Infinity);
-                    setSelected(null);
-                    setMessage(
-                      "Snapshot reopened locally. No upstream retrieval was needed.",
-                    );
-                  } catch (err: any) {
-                    setError(err.message);
-                  }
-                }}
-              />
-            </label>
-          </div>
-        </section>
+        <Replay
+          mode={mode}
+          cursor={cursor}
+          setCursor={setCursor}
+          displayTime={stableDisplayTime}
+          hasEvents={all.length > 0}
+          playing={playing}
+          setPlaying={setPlaying}
+          setAuto={setAuto}
+          lo={lo}
+          hi={hi}
+          replaySpeed={replaySpeed}
+          setReplaySpeed={setReplaySpeed}
+        />
+        <ActivityAreas
+          mode={mode}
+          areas={areas}
+          activeRegion={filters.region?.name || ""}
+          focusRegion={stableFocusRegion}
+          clearRegion={clearRegion}
+        />
+        <EventTable
+          filtered={filtered}
+          ordered={ordered}
+          zone={zone}
+          setZone={setZone}
+          filters={filters}
+          change={stableChange}
+          custom={custom}
+          focusRegion={stableFocusRegion}
+          setFilters={setFilters}
+          setNear={setNear}
+          sort={sort}
+          descending={descending}
+          sortBy={stableSortBy}
+          selectedId={selected?.id || ""}
+          choose={stableChoose}
+          displayTime={stableDisplayTime}
+          page={page}
+          setPage={setPage}
+          hasDataset={!!dataset}
+          exportData={stableExport}
+          importSnapshot={importSnapshot}
+        />
         <Analysis
           events={filtered}
           selected={selected?.id || ""}
@@ -1642,18 +1093,6 @@ function App() {
           </a>
           <div>
             <strong>Data & references</strong>
-            <button
-              onClick={async () => {
-                if (confirm("Stop the local Earthquake Observatory server?")) {
-                  await fetch("/api/quit", { method: "POST" });
-                  setMessage(
-                    "Observatory stopped. You can close this tab and reopen the application when needed.",
-                  );
-                }
-              }}
-            >
-              Quit observatory
-            </button>
             <a href={sources[0].url} target="_blank" rel="noreferrer">
               Earthquake data: USGS
             </a>
@@ -1677,6 +1116,28 @@ function App() {
             An educational observatory, not a prediction or emergency warning
             service. No USGS endorsement.
           </p>
+          <div class="shutdown">
+            <button
+              class="quit"
+              onClick={async () => {
+                if (
+                  confirm(
+                    "Stop the local Earthquake Observatory server? The page will no longer load until you start the application again.",
+                  )
+                ) {
+                  await fetch("/api/quit", { method: "POST" });
+                  setMessage(
+                    "Observatory stopped. You can close this tab and reopen the application when needed.",
+                  );
+                }
+              }}
+            >
+              Stop the local server
+            </button>
+            <span class="muted">
+              Ends the application running on this computer.
+            </span>
+          </div>
         </footer>
         {textPage && (
           <div class="modal-backdrop">
@@ -1718,7 +1179,7 @@ function App() {
               <h2>{textPage}</h2>
               {textPage === "Glossary" ? (
                 glossary.map(([title, body]) => (
-                  <div>
+                  <div key={title}>
                     <h3>{title}</h3>
                     <p>{body}</p>
                   </div>
@@ -1750,7 +1211,7 @@ function App() {
                     "Geographic assets",
                     "Software",
                   ].map((group) => (
-                    <section>
+                    <section key={group}>
                       <h3>{group}</h3>
                       {sources
                         .filter((s) => s.group === group)

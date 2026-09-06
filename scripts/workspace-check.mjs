@@ -286,6 +286,71 @@ try {
   await page
     .getByRole("button", { name: "Auto-rotate: on", exact: true })
     .click();
+  await page.getByRole("button", { name: "Reset view", exact: true }).click();
+  await page.locator("canvas").evaluate((canvas) => {
+    const context = canvas.getContext("2d");
+    const clear = context.clearRect.bind(context);
+    const fill = context.fillText.bind(context);
+    canvas.drawnLabels = [];
+    context.clearRect = (...args) => {
+      canvas.drawnLabels = [];
+      clear(...args);
+    };
+    context.fillText = (text, ...args) => {
+      canvas.drawnLabels.push(text);
+      fill(text, ...args);
+    };
+  });
+  const countries = page.getByRole("checkbox", {
+    name: "Country names",
+    exact: true,
+  });
+  const plates = page.getByRole("checkbox", {
+    name: "Plate boundaries",
+    exact: true,
+  });
+  assert.equal(await plates.isChecked(), false);
+  await countries.check();
+  await page.waitForFunction(() =>
+    document.querySelector("canvas").drawnLabels.includes("Australia"),
+  );
+  assert.equal(await plates.isChecked(), false);
+  assert.equal(
+    await page
+      .locator("canvas")
+      .evaluate((canvas) => canvas.drawnLabels.includes("Canada")),
+    false,
+  );
+  await countries.uncheck();
+  await page.waitForFunction(
+    () => !document.querySelector("canvas").drawnLabels.includes("Australia"),
+  );
+  await countries.check();
+  await page.getByRole("button", { name: "2D map", exact: true }).click();
+  await page.waitForFunction(() =>
+    document.querySelector("canvas").drawnLabels.includes("Canada"),
+  );
+  await plates.check();
+  assert.equal(await countries.isChecked(), true);
+  await plates.uncheck();
+  await page.getByRole("button", { name: "3D globe", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Copy view link", exact: true })
+    .click();
+  await page.waitForFunction(
+    async () =>
+      JSON.parse(
+        new URL(await navigator.clipboard.readText()).searchParams.get("view"),
+      ).countries === true,
+  );
+  const countryLink = await page.evaluate(() => navigator.clipboard.readText());
+  await page.goto(countryLink);
+  await count(618);
+  assert.equal(await countries.isChecked(), true);
+  assert.equal(await plates.isChecked(), false);
+  checks.push(
+    "Country names render independently of plates on globe and flat map, toggle off, hide the far hemisphere, and survive shared links",
+  );
   const screenshots = [];
   for (const [name, width, height] of [
     ["desktop", 1440, 1050],

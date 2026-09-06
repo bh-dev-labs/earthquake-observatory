@@ -13,6 +13,8 @@ type Props = {
   setFlat: (v: boolean) => void;
   plates: boolean;
   setPlates: (v: boolean) => void;
+  countries: boolean;
+  setCountries: (v: boolean) => void;
   region: Region | null;
   section: boolean;
   transect: Section;
@@ -34,6 +36,8 @@ function EarthPanelView({
   setFlat,
   plates,
   setPlates,
+  countries,
+  setCountries,
   region,
   section,
   transect,
@@ -66,6 +70,7 @@ function EarthPanelView({
         setCamera={setCamera}
         flat={flat}
         plates={plates}
+        countries={countries}
         region={region}
         section={section}
         transect={transect}
@@ -175,6 +180,14 @@ function EarthPanelView({
             onChange={(e) => setPlates(e.currentTarget.checked)}
           />{" "}
           Plate boundaries
+        </label>
+        <label>
+          <input
+            type="checkbox"
+            checked={countries}
+            onChange={(e) => setCountries(e.currentTarget.checked)}
+          />{" "}
+          Country names
         </label>
       </div>
       <p class="legend">

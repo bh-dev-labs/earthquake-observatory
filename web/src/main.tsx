@@ -66,6 +66,7 @@ function App() {
     [camera, setCamera] = useState<Camera>({ lon: 150, lat: 15, zoom: 1 }),
     [flat, setFlat] = useState(false),
     [plates, setPlates] = useState(false),
+    [countries, setCountries] = useState(false),
     [selected, setSelected] = useState<Event | null>(null),
     [auto, setAuto] = useState(storedAuto),
     [autoWanted, setAutoWanted] = useState(storedAuto),
@@ -477,6 +478,7 @@ function App() {
       cursor: Number.isFinite(cursor) ? cursor : null,
       zone,
       plates,
+      countries,
       section,
       transect,
       near: near ? { radius: nearRadius, hours: nearHours } : null,
@@ -489,6 +491,7 @@ function App() {
     setCamera(state.camera);
     setFlat(state.flat);
     setPlates(state.plates);
+    setCountries(state.countries);
     setSection(state.section);
     setTransect(state.transect);
     setCursor(state.cursor ?? Infinity);
@@ -959,6 +962,8 @@ function App() {
             flat={flat}
             setFlat={setFlat}
             plates={plates}
+            countries={countries}
+            setCountries={setCountries}
             setPlates={setPlates}
             region={filters.region}
             section={section}

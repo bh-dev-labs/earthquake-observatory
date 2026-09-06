@@ -1,0 +1,368 @@
+import { useEffect, useRef, useState } from "preact/hooks";
+import {
+  geoOrthographic,
+  geoEquirectangular,
+  geoPath,
+  geoGraticule10,
+} from "d3-geo";
+import { feature } from "topojson-client";
+import { color, radius, visible, type Event, type Region } from "./model";
+export type Camera = { lon: number; lat: number; zoom: number };
+type Props = {
+  events: Event[];
+  selected: string;
+  onSelect: (e: Event) => void;
+  camera: Camera;
+  setCamera: (c: Camera) => void;
+  flat: boolean;
+  plates: boolean;
+  region: Region | null;
+  section: boolean;
+  auto: boolean;
+  speed: number;
+  pause: () => void;
+};
+let earthPromise: Promise<any> | null = null,
+  platePromise: Promise<any> | null = null;
+export function Globe(p: Props) {
+  const ref = useRef<HTMLCanvasElement>(null),
+    live = useRef(p);
+  live.current = p;
+  const [earth, setEarth] = useState<any>(null),
+    [plates, setPlates] = useState<any>(null),
+    [error, setError] = useState(""),
+    [hover, setHover] = useState(""),
+    [choices, setChoices] = useState<Event[]>([]),
+    [size, setSize] = useState([800, 600]);
+  const hits = useRef<{ e: Event; x: number; y: number; r: number }[]>([]);
+  const pointers = useRef(new Map<number, [number, number]>());
+  const drag = useRef({ x: 0, y: 0, moved: 0, pinch: 0, multi: false });
+  useEffect(() => {
+    earthPromise ??= fetch("/data/earth.json")
+      .then((r) => r.json())
+      .then((t) => feature(t, t.objects.land));
+    platePromise ??= fetch("/data/plates.json").then((r) => r.json());
+    earthPromise
+      .then(setEarth)
+      .catch(() =>
+        setError("Geography unavailable. Event list remains usable."),
+      );
+    platePromise
+      .then(setPlates)
+      .catch(() => setError("Plate overlay unavailable."));
+    const ro = new ResizeObserver((es) => {
+      const r = es[0].contentRect;
+      setSize([r.width, Math.min(620, Math.max(360, r.width * 0.76))]);
+    });
+    if (ref.current) ro.observe(ref.current.parentElement!);
+    return () => ro.disconnect();
+  }, []);
+  useEffect(() => {
+    if (!p.auto || p.flat) return;
+    let frame = 0,
+      last = 0;
+    const tick = (t: number) => {
+      if (!document.hidden) {
+        if (last) {
+          const q = live.current;
+          q.setCamera({
+            ...q.camera,
+            lon:
+              ((q.camera.lon + ((t - last) / 1000) * 3 * q.speed + 540) % 360) -
+              180,
+          });
+        }
+        last = t;
+      } else last = 0;
+      frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [p.auto, p.speed, p.flat]);
+  useEffect(() => {
+    const canvas = ref.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) {
+      setError("Canvas unavailable. Use the event table below.");
+      return;
+    }
+    const [w, h] = size,
+      dpr = Math.min(2, devicePixelRatio || 1);
+    canvas.width = w * dpr;
+    canvas.height = h * dpr;
+    canvas.style.height = h + "px";
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, w, h);
+    const proj = p.flat
+      ? geoEquirectangular()
+          .rotate([-p.camera.lon, 0, 0])
+          .scale((w / 6.5) * p.camera.zoom)
+          .translate([w / 2, h / 2])
+      : geoOrthographic()
+          .rotate([-p.camera.lon, -p.camera.lat, 0])
+          .scale(Math.min(w, h) * 0.43 * p.camera.zoom)
+          .translate([w / 2, h / 2])
+          .clipAngle(90);
+    const path = geoPath(proj, ctx);
+    ctx.beginPath();
+    path({ type: "Sphere" });
+    ctx.fillStyle = "#e3eef0";
+    ctx.fill();
+    ctx.strokeStyle = "#b5cdd0";
+    ctx.stroke();
+    if (earth) {
+      ctx.beginPath();
+      path(earth);
+      ctx.fillStyle = "#91adb0";
+      ctx.fill();
+    }
+    ctx.beginPath();
+    path(geoGraticule10());
+    ctx.strokeStyle = "#bfd3d6";
+    ctx.lineWidth = 0.55;
+    ctx.stroke();
+    if (p.plates && plates) {
+      ctx.beginPath();
+      path(plates);
+      ctx.strokeStyle = "#865c77";
+      ctx.lineWidth = 1.2;
+      ctx.stroke();
+      ctx.font = "11px sans-serif";
+      ctx.fillStyle = "#62445b";
+      for (const [name, coord] of [
+        ["Pacific", [190, 0]],
+        ["North American", [-100, 45]],
+        ["Eurasian", [65, 45]],
+        ["African", [20, 0]],
+        ["Antarctic", [20, -70]],
+        ["Indo-Australian", [100, -25]],
+        ["South American", [-55, -20]],
+      ] as [string, [number, number]][]) {
+        if (p.flat || visible(coord, [p.camera.lon, p.camera.lat])) {
+          const xy = proj(coord);
+          if (xy) ctx.fillText(name, xy[0] - 20, xy[1]);
+        }
+      }
+    }
+    if (p.region) {
+      const r = p.region;
+      const lines: any = { type: "MultiLineString", coordinates: [] };
+      const east = r.east < r.west ? r.east + 360 : r.east;
+      const norm = (x: number) => ((x + 540) % 360) - 180;
+      const top = [],
+        bottom = [],
+        left = [],
+        right = [];
+      for (let x = r.west; x <= east; x += 1) {
+        top.push([norm(x), r.north]);
+        bottom.push([norm(x), r.south]);
+      }
+      for (let y = r.south; y <= r.north; y += 1) {
+        left.push([r.west, y]);
+        right.push([r.east, y]);
+      }
+      lines.coordinates = [top, bottom, left, right];
+      ctx.beginPath();
+      path(lines);
+      ctx.strokeStyle = "#244f48";
+      ctx.lineWidth = 2;
+      ctx.setLineDash([5, 4]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+    if (p.section) {
+      ctx.beginPath();
+      path({
+        type: "LineString",
+        coordinates: [
+          [170, -22],
+          [-170, -22],
+        ],
+      });
+      ctx.strokeStyle = "#243740";
+      ctx.lineWidth = 3;
+      ctx.stroke();
+      for (const lat of [-20.2, -23.8]) {
+        ctx.beginPath();
+        path({
+          type: "LineString",
+          coordinates: [
+            [170, lat],
+            [-170, lat],
+          ],
+        });
+        ctx.setLineDash([4, 4]);
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+    }
+    hits.current = [];
+    const ordered = [
+      ...p.events.filter((e) => e.id !== p.selected),
+      ...p.events.filter((e) => e.id === p.selected),
+    ];
+    for (const e of ordered) {
+      const [lon, lat, depth] = e.geometry.coordinates;
+      if (!p.flat && !visible([lon, lat], [p.camera.lon, p.camera.lat]))
+        continue;
+      const xy = proj([lon, lat]);
+      if (!xy) continue;
+      const [x, y] = xy;
+      if (x < 0 || x > w || y < 0 || y > h) continue;
+      const r = radius(e.properties.mag);
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.fillStyle = color(depth);
+      ctx.globalAlpha = p.selected && e.id !== p.selected ? 0.75 : 1;
+      ctx.fill();
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = "#fff";
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      if (e.id === p.selected) {
+        ctx.beginPath();
+        ctx.arc(x, y, r + 5, 0, Math.PI * 2);
+        ctx.strokeStyle = "#243740";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      }
+      hits.current.push({ e, x, y, r });
+    }
+  }, [
+    earth,
+    plates,
+    p.events,
+    p.selected,
+    p.camera,
+    p.flat,
+    p.plates,
+    p.region,
+    p.section,
+    size,
+  ]);
+  const local = (e: PointerEvent) => {
+    const r = ref.current!.getBoundingClientRect();
+    return [e.clientX - r.left, e.clientY - r.top] as [number, number];
+  };
+  const pick = (x: number, y: number) =>
+    hits.current
+      .filter((h) => Math.hypot(x - h.x, y - h.y) < Math.max(10, h.r + 3))
+      .reverse();
+  return (
+    <div class="canvas-wrap">
+      <canvas
+        ref={ref}
+        aria-label="Interactive Earth. Drag to rotate; use controls to rotate or zoom with a keyboard. Select the same events in the table below."
+        role="img"
+        onPointerDown={(e) => {
+          p.pause();
+          setChoices([]);
+          ref.current!.setPointerCapture(e.pointerId);
+          const q = local(e);
+          pointers.current.set(e.pointerId, q);
+          if (pointers.current.size === 1)
+            drag.current = {
+              x: q[0],
+              y: q[1],
+              moved: 0,
+              pinch: 0,
+              multi: false,
+            };
+          else {
+            drag.current.multi = true;
+            const a = [...pointers.current.values()];
+            drag.current.pinch = Math.hypot(
+              a[0][0] - a[1][0],
+              a[0][1] - a[1][1],
+            );
+          }
+        }}
+        onPointerMove={(e) => {
+          const [x, y] = local(e);
+          if (pointers.current.has(e.pointerId)) {
+            const old = pointers.current.get(e.pointerId)!;
+            pointers.current.set(e.pointerId, [x, y]);
+            drag.current.moved += Math.hypot(x - old[0], y - old[1]);
+            if (pointers.current.size > 1) {
+              const a = [...pointers.current.values()],
+                d = Math.hypot(a[0][0] - a[1][0], a[0][1] - a[1][1]);
+              if (drag.current.pinch)
+                p.setCamera({
+                  ...p.camera,
+                  zoom: Math.min(
+                    2.5,
+                    Math.max(0.65, (p.camera.zoom * d) / drag.current.pinch),
+                  ),
+                });
+              drag.current.pinch = d;
+            } else
+              p.setCamera({
+                ...p.camera,
+                lon: ((p.camera.lon - (x - old[0]) * 0.3 + 540) % 360) - 180,
+                lat: Math.max(
+                  -85,
+                  Math.min(85, p.camera.lat + (y - old[1]) * 0.3),
+                ),
+              });
+          } else {
+            const h = pick(x, y)[0];
+            setHover(
+              h
+                ? `M ${h.e.properties.mag ?? "—"} · ${h.e.properties.place} · ${h.e.geometry.coordinates[2] ?? "Unavailable"} km · ${new Date(h.e.properties.time).toISOString()}`
+                : "",
+            );
+          }
+        }}
+        onPointerUp={(e) => {
+          const [x, y] = local(e);
+          pointers.current.delete(e.pointerId);
+          if (!drag.current.multi && drag.current.moved < 7) {
+            const h = pick(x, y);
+            if (h.length === 1) p.onSelect(h[0].e);
+            else if (h.length > 1) setChoices(h.map((v) => v.e));
+          }
+        }}
+        onPointerCancel={(e) => pointers.current.delete(e.pointerId)}
+        onWheel={(e) => {
+          if (document.activeElement === ref.current || e.ctrlKey) {
+            e.preventDefault();
+            p.pause();
+            p.setCamera({
+              ...p.camera,
+              zoom: Math.max(
+                0.65,
+                Math.min(2.5, p.camera.zoom * Math.exp(-e.deltaY * 0.002)),
+              ),
+            });
+          }
+        }}
+        tabIndex={0}
+      />
+      {hover && (
+        <div class="hover" role="tooltip">
+          {hover}
+        </div>
+      )}
+      {error && <p role="status">{error}</p>}
+      {choices.length > 0 && (
+        <div class="chooser">
+          <strong>{choices.length} overlapping observations</strong>
+          <button onClick={() => setChoices([])}>Close chooser</button>
+          {choices.map((e) => (
+            <button
+              onClick={() => {
+                p.onSelect(e);
+                setChoices([]);
+              }}
+            >
+              M {e.properties.mag ?? "—"} · {e.properties.place} ·{" "}
+              {new Date(e.properties.time).toISOString()}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}

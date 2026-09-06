@@ -1,0 +1,42 @@
+{
+  "checks": [
+    "Failed details preserve basic selection and retry",
+    "Direct globe marker selection after centering",
+    "Shared URL restores selected event",
+    "Drag does not select",
+    "All four activity navigation/reset/return flows",
+    "Dialog Escape",
+    "Initial live failure retains historical data; demo recovery",
+    "Live historical retrieval through UI",
+    "Ten repeated view switches retain bounded DOM membership"
+  ],
+  "errors": [],
+  "stress": {
+    "count": 20000,
+    "interactionMilliseconds": [
+      156.9404999999997,
+      172.28037500000028,
+      133.06474999999955,
+      165.6415419999994,
+      136.7782499999994,
+      166.854875,
+      136.38937499999975,
+      170.13616600000023,
+      138.34429100000034,
+      172.00287500000013,
+      138.72641699999986,
+      172.74074999999993
+    ],
+    "frame": {
+      "frames": 112,
+      "duration": 3012.599999976159,
+      "fps": 37.17718913924396,
+      "maxFrame": 33.400000000001455
+    },
+    "memory": {
+      "used": 624000000,
+      "total": 703000000
+    },
+    "environment": "macOS arm64, headless Chromium 153, viewport 1440x1050; Playwright wall times include automation overhead"
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "archive": "darwin-arm64",
+  "root": "/private/tmp/atlas-consumer-N3XTyG",
+  "checks": [
+    "Fresh ZIP extraction",
+    "Native executable start",
+    "Embedded production frontend",
+    "Offline 618-event dataset",
+    "SQLite readiness",
+    "Cross-origin quit rejected",
+    "Consistent backup while running",
+    "Restart preserves snapshot identity",
+    "Restore into clean directory",
+    "Integrity check and restored launch",
+    "Launch Services opens packaged macOS app",
+    "Launched app health reports version 0.1.0",
+    "Native app defaults to live mode",
+    "macOS ad-hoc signature verification"
+  ],
+  "windowsRuntimeTested": false,
+  "intelMacRuntimeTested": false
+}

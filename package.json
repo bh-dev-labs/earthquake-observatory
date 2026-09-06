@@ -1,0 +1,29 @@
+{
+  "name": "earthquake-observatory",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc --noEmit && vite build web --outDir ../cmd/observatory/dist --emptyOutDir",
+    "test": "tsx --test web/src/*.test.ts",
+    "check": "tsc --noEmit",
+    "format": "prettier --write web/src scripts/*.mjs",
+    "format:check": "prettier --check web/src scripts/*.mjs"
+  },
+  "dependencies": {
+    "d3-geo": "3.1.1",
+    "preact": "10.29.8",
+    "topojson-client": "3.1.0"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "4.13.0",
+    "@playwright/test": "1.63.0",
+    "@types/d3-geo": "3.1.1",
+    "@types/node": "26.4.1",
+    "@types/topojson-client": "3.1.5",
+    "prettier": "3.9.6",
+    "tsx": "4.23.13",
+    "typescript": "7.0.2",
+    "vite": "8.2.2"
+  }
+}

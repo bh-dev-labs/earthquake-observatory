@@ -9,7 +9,7 @@ import { feature } from "topojson-client";
 import type { FeatureCollection } from "geojson";
 import {
   countryLabels,
-  countryLabelVisible,
+  countryLabelOpacity,
   type CountryLabel,
 } from "./countryLabels";
 import { validRegion, type Section } from "./data";
@@ -57,6 +57,9 @@ export function Globe(p: Props) {
     [cursor, setCursor] = useState(""),
     [spoken, setSpoken] = useState("");
   const hits = useRef<{ e: Event; x: number; y: number; r: number }[]>([]);
+  // Names drawn last frame keep their place first, so a larger neighbour
+  // rotating into view cannot evict them and cascade the rest.
+  const shownLabels = useRef(new Set<string>());
   const pointers = useRef(new Map<number, [number, number]>());
   const drag = useRef({ x: 0, y: 0, moved: 0, pinch: 0, multi: false });
   useEffect(() => {
@@ -245,6 +248,74 @@ export function Globe(p: Props) {
       ctx.stroke();
       ctx.setLineDash([]);
     }
+    if (p.countries) {
+      const occupied: {
+        left: number;
+        right: number;
+        top: number;
+        bottom: number;
+      }[] = [];
+      const kept = new Set<string>();
+      ctx.save();
+      ctx.font = "12px sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillStyle = token("--ink-strong");
+      ctx.strokeStyle = token("--globe-ocean");
+      ctx.lineWidth = 3;
+      ctx.lineJoin = "round";
+      const previous = shownLabels.current;
+      const candidates = [
+        ...countries.filter((country) => previous.has(country.name)),
+        ...countries.filter((country) => !previous.has(country.name)),
+      ];
+      for (const country of candidates) {
+        const alpha = countryLabelOpacity(
+          country,
+          [p.camera.lon, p.camera.lat],
+          p.flat,
+        );
+        if (alpha <= 0) continue;
+        const point = proj(country.coordinate);
+        if (!point) continue;
+        // Whole-pixel anchors: text re-antialiased at a new subpixel offset
+        // every frame reads as shimmer while the globe turns.
+        const leftToRight = Math.round(point[0]),
+          topToBottom = Math.round(point[1]);
+        const halfWidth = ctx.measureText(country.name).width / 2 + 4;
+        const box = {
+          left: leftToRight - halfWidth,
+          right: leftToRight + halfWidth,
+          top: topToBottom - 9,
+          bottom: topToBottom + 9,
+        };
+        if (
+          box.left < 4 ||
+          box.right > w - 4 ||
+          box.top < 4 ||
+          box.bottom > h - 4
+        )
+          continue;
+        if (
+          occupied.some(
+            (other) =>
+              box.left < other.right &&
+              box.right > other.left &&
+              box.top < other.bottom &&
+              box.bottom > other.top,
+          )
+        )
+          continue;
+        occupied.push(box);
+        kept.add(country.name);
+        ctx.globalAlpha = alpha;
+        ctx.strokeText(country.name, leftToRight, topToBottom);
+        ctx.fillText(country.name, leftToRight, topToBottom);
+      }
+      ctx.globalAlpha = 1;
+      ctx.restore();
+      shownLabels.current = kept;
+    }
     hits.current = [];
     const ordered = [
       ...p.events.filter((e) => e.id !== p.selected),
@@ -285,57 +356,6 @@ export function Globe(p: Props) {
         ctx.setLineDash([]);
       }
       hits.current.push({ e, x, y, r });
-    }
-    if (p.countries) {
-      const occupied = hits.current.map((hit) => ({
-        left: hit.x - hit.r - 6,
-        right: hit.x + hit.r + 6,
-        top: hit.y - hit.r - 6,
-        bottom: hit.y + hit.r + 6,
-      }));
-      ctx.save();
-      ctx.font = "12px sans-serif";
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillStyle = token("--ink-strong");
-      ctx.strokeStyle = token("--globe-ocean");
-      ctx.lineWidth = 3;
-      ctx.lineJoin = "round";
-      for (const country of countries) {
-        if (!countryLabelVisible(country, [p.camera.lon, p.camera.lat], p.flat))
-          continue;
-        const point = proj(country.coordinate);
-        if (!point) continue;
-        const [leftToRight, topToBottom] = point;
-        const halfWidth = ctx.measureText(country.name).width / 2 + 4;
-        const box = {
-          left: leftToRight - halfWidth,
-          right: leftToRight + halfWidth,
-          top: topToBottom - 9,
-          bottom: topToBottom + 9,
-        };
-        if (
-          box.left < 4 ||
-          box.right > w - 4 ||
-          box.top < 4 ||
-          box.bottom > h - 4
-        )
-          continue;
-        if (
-          occupied.some(
-            (other) =>
-              box.left < other.right &&
-              box.right > other.left &&
-              box.top < other.bottom &&
-              box.bottom > other.top,
-          )
-        )
-          continue;
-        occupied.push(box);
-        ctx.strokeText(country.name, leftToRight, topToBottom);
-        ctx.fillText(country.name, leftToRight, topToBottom);
-      }
-      ctx.restore();
     }
   }, [
     earth,

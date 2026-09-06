@@ -3,7 +3,11 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { feature } from "topojson-client";
 import type { FeatureCollection } from "geojson";
-import { countryLabels, countryLabelVisible } from "./countryLabels";
+import {
+  countryLabels,
+  countryLabelOpacity,
+  countryLabelVisible,
+} from "./countryLabels";
 import { parseView } from "./data";
 
 const geography = JSON.parse(
@@ -39,6 +43,21 @@ test("country labels hide the far side of the globe but remain available on the 
   assert.equal(countryLabelVisible(japan, [140, 35], false), true);
   assert.equal(countryLabelVisible(japan, [-40, -35], false), false);
   assert.equal(countryLabelVisible(japan, [-40, -35], true), true);
+});
+
+test("country labels ease in over the limb rather than popping", () => {
+  const japan = labels.find((country) => country.name === "Japan")!;
+  assert.equal(countryLabelOpacity(japan, [140, 35], false), 1);
+  assert.equal(countryLabelOpacity(japan, [-40, -35], false), 0);
+  assert.equal(countryLabelOpacity(japan, [-40, -35], true), 1);
+  // Sweep the camera away from Japan: opacity is monotone, never a step.
+  let last = 1;
+  for (let lon = 140; lon >= -40; lon -= 1) {
+    const next = countryLabelOpacity(japan, [lon, 35], false);
+    assert.ok(next <= last + 1e-9, `opacity rose at ${lon}`);
+    assert.ok(last - next < 0.35, `opacity jumped at ${lon}`);
+    last = next;
+  }
 });
 
 test("country-name state is independent of plates and older shared views default to off", () => {

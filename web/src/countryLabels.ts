@@ -28,10 +28,22 @@ export function countryLabels(countries: FeatureCollection): CountryLabel[] {
     .sort((first, second) => second.area - first.area);
 }
 
+// Labels fade over the last 0.2 rad before the limb instead of cutting off
+// at one angle, so a rotating globe eases names in rather than popping them.
+export function countryLabelOpacity(
+  country: CountryLabel,
+  centre: [number, number],
+  flat: boolean,
+) {
+  if (flat) return 1;
+  const distance = geoDistance(country.coordinate, centre);
+  return Math.max(0, Math.min(1, (Math.PI / 2 - 0.05 - distance) / 0.2));
+}
+
 export function countryLabelVisible(
   country: CountryLabel,
   centre: [number, number],
   flat: boolean,
 ) {
-  return flat || geoDistance(country.coordinate, centre) < Math.PI / 2 - 0.15;
+  return countryLabelOpacity(country, centre, flat) > 0;
 }

@@ -220,3 +220,49 @@ export function download(
   a.click();
   setTimeout(() => URL.revokeObjectURL(u), 1000);
 }
+
+// Every zone the browser's ICU data knows, grouped by region for a select.
+// Intl.supportedValuesOf is the source of truth, so no timezone table ships
+// with the app; older engines fall back to UTC and the local zone alone.
+export function timeZoneGroups() {
+  let zones: string[] = [];
+  try {
+    zones = (Intl as any).supportedValuesOf?.("timeZone") ?? [];
+  } catch {
+    zones = [];
+  }
+  const groups = new Map<string, { value: string; label: string }[]>();
+  for (const zone of zones) {
+    const slash = zone.indexOf("/");
+    const region =
+      slash < 0 ? "Other" : zone.slice(0, slash).replace(/_/g, " ");
+    if (!groups.has(region)) groups.set(region, []);
+    groups.get(region)!.push({
+      value: zone,
+      label: (slash < 0 ? zone : zone.slice(slash + 1)).replace(/_/g, " "),
+    });
+  }
+  return [...groups].sort((a, b) => a[0].localeCompare(b[0]));
+}
+
+// Current offset from UTC, shown so a reader can place the zone without
+// converting a timestamp in their head.
+export function zoneOffset(zone: string, at = Date.now()) {
+  try {
+    const parts = new Intl.DateTimeFormat("en-GB", {
+      timeZone: zone,
+      timeZoneName: "shortOffset",
+    }).formatToParts(at);
+    return parts.find((p) => p.type === "timeZoneName")?.value ?? "";
+  } catch {
+    return "";
+  }
+}
+
+// Short form for headings: "UTC", or "Toronto (GMT-4)".
+export function zoneLabel(zone: string) {
+  if (zone === "UTC") return "UTC";
+  const city = zone.slice(zone.indexOf("/") + 1).replace(/_/g, " ");
+  const offset = zoneOffset(zone);
+  return offset ? `${city} (${offset})` : city;
+}

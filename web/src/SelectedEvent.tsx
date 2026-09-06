@@ -1,6 +1,6 @@
 import { memo } from "preact/compat";
 import type { Ref } from "preact";
-import type { Event } from "./model";
+import { zoneLabel, type Event } from "./model";
 
 type Props = {
   selected: Event;
@@ -98,7 +98,7 @@ function SelectedEventView({
           <dd>{selected.properties.status || "Unavailable"}</dd>
         </div>
         <div class="wide">
-          <dt>Event time · {zone}</dt>
+          <dt>Event time · {zoneLabel(zone)}</dt>
           <dd>{displayTime(selected.properties.time)}</dd>
         </div>
         <div>

@@ -3,6 +3,9 @@ import {
   color,
   defaults,
   regions,
+  timeZoneGroups,
+  zoneLabel,
+  zoneOffset,
   type Event,
   type Filters,
   type Region,
@@ -34,6 +37,9 @@ type Props = {
 
 const fmt = (v: number | null | undefined, digits = 1) =>
   v == null ? "Unavailable" : v.toFixed(digits);
+// Built once: the zone list and its offsets do not change while the page is open.
+const localZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+const zoneGroups = timeZoneGroups();
 
 function EventTableView({
   filtered,
@@ -67,10 +73,19 @@ function EventTableView({
         <label>
           Display time zone{" "}
           <select value={zone} onChange={(e) => setZone(e.currentTarget.value)}>
-            <option value="UTC">UTC</option>
-            <option value={Intl.DateTimeFormat().resolvedOptions().timeZone}>
-              Local ({Intl.DateTimeFormat().resolvedOptions().timeZone})
+            <option value="UTC">UTC — catalog standard</option>
+            <option value={localZone}>
+              Local · {localZone.replace(/_/g, " ")} ({zoneOffset(localZone)})
             </option>
+            {zoneGroups.map(([region, zones]) => (
+              <optgroup key={region} label={region}>
+                {zones.map((z) => (
+                  <option key={z.value} value={z.value}>
+                    {z.label} ({zoneOffset(z.value)})
+                  </option>
+                ))}
+              </optgroup>
+            ))}
           </select>
         </label>
       </div>
@@ -210,7 +225,7 @@ function EventTableView({
                   ["mag", "Magnitude / type"],
                   ["place", "Location"],
                   ["depth", "Depth"],
-                  ["time", `Time · ${zone}`],
+                  ["time", `Time · ${zoneLabel(zone)}`],
                   ["status", "Review"],
                 ] as const
               ).map(([key, label]) => (

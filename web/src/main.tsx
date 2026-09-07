@@ -47,7 +47,6 @@ import {
   type Region,
 } from "./model";
 import "./style.css";
-const repository = "https://github.com/bruce-hoppe_uoft/earthquake-observatory";
 type SortKey = "mag" | "place" | "depth" | "time" | "status";
 const utc = (t: number) =>
   new Date(t).toISOString().replace("T", " ").replace(".000Z", " UTC");
@@ -1138,9 +1137,7 @@ function App() {
           />
         )}
         <footer>
-          <a href={repository} target="_blank" rel="noreferrer">
-            Built by Bruce Hoppe · Source on GitHub
-          </a>
+          <span>Built by Bruce Hoppe</span>
           <div>
             <strong>Data & references</strong>
             <a href={sources[0].url} target="_blank" rel="noreferrer">
@@ -1247,13 +1244,9 @@ function App() {
                     server. Clicking source links opens the source website.
                   </p>
                   <p>
-                    Built by Bruce Hoppe. Source code, licence and issue
-                    tracker:{" "}
-                    <a href={repository} target="_blank" rel="noreferrer">
-                      {repository.replace("https://", "")}
-                    </a>
-                    . An independent educational project, not affiliated with or
-                    endorsed by the University of Toronto or the USGS.
+                    Built by Bruce Hoppe. An independent educational project,
+                    not affiliated with or endorsed by the University of Toronto
+                    or the USGS.
                   </p>
                   {[
                     "Earthquake observations",

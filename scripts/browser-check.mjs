@@ -84,10 +84,7 @@ await page
   .click();
 if (
   !(await page
-    .getByRole("link", {
-      name: "Built by Bruce Hoppe · Source on GitHub",
-      exact: true,
-    })
+    .getByText("Built by Bruce Hoppe", { exact: true })
     .isVisible())
 )
   throw Error("Missing visible author credit");

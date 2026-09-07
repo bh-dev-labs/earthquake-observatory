@@ -1,4 +1,4 @@
-# 0.2.0 — local release candidate
+# 0.2.1 — local release candidate
 
 New Go application with embedded Preact/TypeScript frontend and SQLite persistence. Includes rotatable geographic globe and flat map, direct event selection, current activity cells, filters, event details, historical queries, replay, charts, four guided activities, linked Tonga section, magnitude illustration, exports, snapshot import and references.
 
@@ -9,3 +9,5 @@ Refreshed 2026-09-06 after PR #1 merged: optional country names, compact event s
 0.2.0: recent periods can be loaded at any USGS magnitude threshold (all, M1.0+, M2.5+, M4.5+, significant) through a Detail control that travels in shared links; historical retrievals obtain a catalog size estimate first and refuse an interval over the 50,000-event budget before partitioning; browser regression checks repaired. See CHANGELOG.md.
 
 Country-label refresh: cached text images move at fractional pixel positions, smaller countries participate in geographic spacing, and zoom fades names in without displacing existing labels. Verified with 27 frontend tests, Go tests/vet, rotation and responsive browser checks, and a freshly extracted Apple Silicon package. Intel macOS and Windows runtime testing remain outstanding.
+
+0.2.1: attribution reads "© 2026 Bruce Hoppe" in the footer and About panel, and the repository link was removed from both. No functional change.

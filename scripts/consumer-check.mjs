@@ -5,13 +5,13 @@ import assert from "node:assert/strict";
 const root = await fs.mkdtemp("/private/tmp/atlas-consumer-");
 execFileSync("/usr/bin/unzip", [
   "-q",
-  "release/EarthquakeObservatory-0.2.0-darwin-arm64.zip",
+  "release/EarthquakeObservatory-0.2.1-darwin-arm64.zip",
   "-d",
   root,
 ]);
 const binary = path.join(
   root,
-  "EarthquakeObservatory-0.2.0-darwin-arm64",
+  "EarthquakeObservatory-0.2.1-darwin-arm64",
   "Earthquake Observatory.app",
   "Contents/MacOS/earthquake-observatory",
 );

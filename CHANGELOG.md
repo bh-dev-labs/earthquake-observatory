@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.1 (local release candidate)
+
+- Attribution reads "© 2026 Bruce Hoppe" in the footer and About panel. The repository link was removed from both, so the interface no longer points at a source host.
+
 ## 0.2.0 (local release candidate)
 
 - Added the USGS magnitude-threshold summary feeds. A Detail control selects `all`, `M1.0+`, `M2.5+`, `M4.5+` or significant-only for any recent period; the choice is carried in shared view links. The 30-day feed drops from roughly 8 MiB to a few hundred KiB at `M4.5+`.

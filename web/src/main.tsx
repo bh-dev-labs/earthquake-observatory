@@ -1137,7 +1137,7 @@ function App() {
           />
         )}
         <footer>
-          <span>Built by Bruce Hoppe</span>
+          <span>© 2026 Bruce Hoppe</span>
           <div>
             <strong>Data & references</strong>
             <a href={sources[0].url} target="_blank" rel="noreferrer">
@@ -1244,9 +1244,9 @@ function App() {
                     server. Clicking source links opens the source website.
                   </p>
                   <p>
-                    Built by Bruce Hoppe. An independent educational project,
-                    not affiliated with or endorsed by the University of Toronto
-                    or the USGS.
+                    © 2026 Bruce Hoppe. An independent educational project, not
+                    affiliated with or endorsed by the University of Toronto or
+                    the USGS.
                   </p>
                   {[
                     "Earthquake observations",

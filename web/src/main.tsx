@@ -1247,7 +1247,7 @@ function App() {
                   {/* © 2026 Bruce Hoppe. */}
                   <p>
                     An independent educational project, not affiliated with or
-                    endorsed by the University of Toronto or the USGS.
+                    endorsed by the USGS.
                   </p>
                   {[
                     "Earthquake observations",

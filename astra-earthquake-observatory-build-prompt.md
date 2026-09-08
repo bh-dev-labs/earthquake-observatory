@@ -220,7 +220,7 @@ A lesson passes review only if its observations are reproducible from its bundle
 
 ### Required author credit
 
-Display the exact text **coded by bruce.hoppe@utoronto.ca** in the production application's footer and About page, including desktop and mobile layouts. It should be readable and understated, not hidden in source comments. The email may be a `mailto:` link. Keep author credit separate from USGS data attribution and third-party asset credits; do not imply institutional or USGS endorsement. Include a release check for the exact visible wording.
+Display an author credit in the production application's footer and About page, including desktop and mobile layouts. It should be readable and understated, not hidden in source comments. The email may be a `mailto:` link. Keep author credit separate from USGS data attribution and third-party asset credits; do not imply institutional or USGS endorsement. Include a release check for the exact visible wording.
 
 
 Aim for the clarity of a well-designed scientific observatory. The map and data should dominate; decorative cards and oversized metrics should not displace them.
@@ -235,7 +235,7 @@ Review at approximately 1440px, 1024px, and 390px widths. Check touch interactio
 
 ### Required footer references
 
-In the real application's footer, show the exact author credit **coded by bruce.hoppe@utoronto.ca** alongside a compact **Data & references** group. Keep source links readable on desktop and mobile. Include these directly accessible links:
+In the real application's footer, show the author credit alongside a compact **Data & references** group. Keep source links readable on desktop and mobile. Include these directly accessible links:
 
 - **Earthquake data: USGS** — https://earthquake.usgs.gov/earthquakes/feed/v1.0/geojson.php
 - **Historical catalog** — https://earthquake.usgs.gov/fdsnws/event/1/

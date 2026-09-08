@@ -2,7 +2,7 @@
 
 ## 0.2.1 (local release candidate)
 
-- Removed the on-screen author credit and the repository link from the footer and About panel. The copyright is retained as a source comment and in LICENSE, which ships in every archive; the About panel keeps the statement that the project is independent of the University of Toronto and the USGS.
+- Removed the on-screen author credit and the repository link from the footer and About panel. The copyright is retained as a source comment and in LICENSE, which ships in every archive; the About panel keeps the statement that the project is independent of the USGS.
 
 ## 0.2.0 (local release candidate)
 
@@ -27,7 +27,7 @@
 - Added custom spherical transects, a Tonga preset, selected-event endpoints and readable mobile axes; settings survive pinned/shared views and appear in export metadata.
 - Added snapshot checksum verification and isolated browser regression tests with desktop/mobile pixel and accessibility checks.
 
-- Attribution links to the repository instead of publishing an email address, and states that the project is independent of the University of Toronto and the USGS.
+- Attribution avoids publishing an email address, and states that the project is independent of the USGS.
 - The release string is single-sourced from `package.json` and reaches Go through `-ldflags`; an unflagged build reports `dev`.
 - Colour moved to CSS custom properties with a dark theme, and depth now uses one sequential light-to-dark ramp instead of three unrelated hues.
 - Event table sorts from its column headers with `aria-sort`, across five columns in both directions.

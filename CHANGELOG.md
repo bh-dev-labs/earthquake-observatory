@@ -2,7 +2,7 @@
 
 ## 0.2.1 (local release candidate)
 
-- Attribution reads "© 2026 Bruce Hoppe" in the footer and About panel. The repository link was removed from both, so the interface no longer points at a source host.
+- Removed the on-screen author credit and the repository link from the footer and About panel. The copyright is retained as a source comment and in LICENSE, which ships in every archive; the About panel keeps the statement that the project is independent of the University of Toronto and the USGS.
 
 ## 0.2.0 (local release candidate)
 

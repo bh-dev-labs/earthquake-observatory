@@ -10,4 +10,4 @@ Refreshed 2026-09-06 after PR #1 merged: optional country names, compact event s
 
 Country-label refresh: cached text images move at fractional pixel positions, smaller countries participate in geographic spacing, and zoom fades names in without displacing existing labels. Verified with 27 frontend tests, Go tests/vet, rotation and responsive browser checks, and a freshly extracted Apple Silicon package. Intel macOS and Windows runtime testing remain outstanding.
 
-0.2.1: attribution reads "© 2026 Bruce Hoppe" in the footer and About panel, and the repository link was removed from both. No functional change.
+0.2.1: the footer and About panel no longer show an author credit or a repository link. The copyright stays in the source and in LICENSE, which ships with each package. No functional change.

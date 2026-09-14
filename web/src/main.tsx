@@ -1138,7 +1138,7 @@ function App() {
           />
         )}
         <footer>
-          {/* © 2026 Bruce Hoppe — attribution retained in source, not shown. */}
+          <span class="credit">A Bruce Hoppe Project</span>
           <div>
             <strong>Data & references</strong>
             <a href={sources[0].url} target="_blank" rel="noreferrer">
@@ -1244,10 +1244,9 @@ function App() {
                     fonts. Live retrieval contacts USGS through this local Go
                     server. Clicking source links opens the source website.
                   </p>
-                  {/* © 2026 Bruce Hoppe. */}
                   <p>
-                    An independent educational project, not affiliated with or
-                    endorsed by the USGS.
+                    A Bruce Hoppe Project. An independent educational project,
+                    not affiliated with or endorsed by the USGS.
                   </p>
                   {[
                     "Earthquake observations",

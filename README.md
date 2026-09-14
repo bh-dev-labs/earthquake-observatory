@@ -88,3 +88,5 @@ Read [QUICKSTART](QUICKSTART.md), [operations](docs/operations.md), [scientific 
 
 Licensed under the [MIT License](LICENSE). Third-party licenses are recorded in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). This is an educational observatory, not an earthquake prediction or emergency warning service.
 
+A Bruce Hoppe project.
+

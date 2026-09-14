@@ -2,7 +2,7 @@
 
 ## 0.2.1 (local release candidate)
 
-- Removed the on-screen author credit and the repository link from the footer and About panel. The copyright is retained as a source comment and in LICENSE, which ships in every archive; the About panel keeps the statement that the project is independent of the USGS.
+- Restored the on-screen author credit — "A Bruce Hoppe Project" — to the footer and About panel, and to README, without a repository link. The copyright remains recorded as a source comment and in LICENSE, which ships in every archive; the About panel keeps the statement that the project is independent of the USGS.
 
 ## 0.2.0 (local release candidate)
 

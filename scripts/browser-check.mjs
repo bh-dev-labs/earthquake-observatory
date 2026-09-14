@@ -82,8 +82,10 @@ await page
 await page
   .getByRole("button", { name: "Return to my exploration", exact: true })
   .click();
-if ((await page.getByText("Bruce Hoppe", { exact: false }).count()) > 0)
-  throw Error("Author credit should not be visible in the interface");
+if (
+  !(await page.getByText("A Bruce Hoppe Project", { exact: true }).isVisible())
+)
+  throw Error("Missing visible author credit");
 const axe = await new AxeBuilder({ page }).analyze();
 await fs.writeFile(
   "docs/accessibility-results.json",

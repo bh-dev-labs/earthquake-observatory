@@ -848,6 +848,10 @@ footer {
   font-size: 13px;
   background: var(--surface-sunken);
 }
+footer .credit {
+  display: block;
+  color: var(--ink-muted);
+}
 footer > div {
   display: flex;
   align-items: center;

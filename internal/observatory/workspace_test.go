@@ -3,6 +3,7 @@ package observatory
 import (
 	"encoding/json"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -68,5 +69,33 @@ func TestInvalidInvestigationDoesNotPublish(t *testing.T) {
 	values, err := store.Investigations()
 	if err != nil || len(values) != 0 {
 		t.Fatal("invalid save published")
+	}
+}
+
+func TestPinnedInvestigationQuota(t *testing.T) {
+	store, err := Open(filepath.Join(t.TempDir(), "db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.DB.Close()
+	snapshot, err := store.Save("quota", fixture("4", "10", 3))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < maxPinnedInvestigations; i++ {
+		if _, err = store.SaveInvestigation(Investigation{
+			Name:     "Study",
+			View:     json.RawMessage(`{"mode":"demo"}`),
+			Snapshot: &snapshot,
+		}); err != nil {
+			t.Fatalf("pin %d failed: %v", i, err)
+		}
+	}
+	if _, err = store.SaveInvestigation(Investigation{
+		Name:     "One too many",
+		View:     json.RawMessage(`{"mode":"demo"}`),
+		Snapshot: &snapshot,
+	}); err == nil || !strings.Contains(err.Error(), "limit reached") {
+		t.Fatalf("quota not enforced: %v", err)
 	}
 }

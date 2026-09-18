@@ -2,6 +2,8 @@
 
 Local same-origin JSON API. Investigation/cache/job endpoints are unreleased source additions, not yet included in existing 0.1.0 archives. Mutations require `Origin: http://<request-host>` and `Sec-Fetch-Site: same-origin`; JSON bodies require `Content-Type: application/json`.
 
+The server is intentionally loopback-only and has no user authentication. It is not suitable for public hosting. Saved investigations are limited to 20 entries and 200 MiB of total snapshot payloads.
+
 | Endpoint | Result |
 |---|---|
 | `/api/health` | process status and version |

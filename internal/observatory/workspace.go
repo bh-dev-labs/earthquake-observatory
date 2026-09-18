@@ -32,6 +32,11 @@ type CacheInfo struct {
 	DatabaseBytes int64        `json:"databaseBytes"`
 }
 
+const (
+	maxPinnedInvestigations = 20
+	maxPinnedBytes          = 200 << 20
+)
+
 func validNotes(name, notes string) bool {
 	return strings.TrimSpace(name) != "" && len(name) <= 120 && len(notes) <= 10000
 }
@@ -62,8 +67,28 @@ func (s *Store) SaveInvestigation(value Investigation) (Investigation, error) {
 	value.Name = strings.TrimSpace(value.Name)
 	value.Created = time.Now().UTC().Format(time.RFC3339Nano)
 	value.Bytes = int64(len(raw))
-	_, err = s.DB.Exec("INSERT INTO investigations VALUES(?,?,?,?,?,?)", value.ID, value.Name, value.Notes, value.Created, []byte(value.View), raw)
-	return value, err
+	tx, err := s.DB.Begin()
+	if err != nil {
+		return Investigation{}, err
+	}
+	defer tx.Rollback()
+	var count, bytes int64
+	if err = tx.QueryRow("SELECT count(*), coalesce(sum(length(snapshot)), 0) FROM investigations").Scan(&count, &bytes); err != nil {
+		return Investigation{}, err
+	}
+	if count >= maxPinnedInvestigations {
+		return Investigation{}, fmt.Errorf("pinned investigation limit reached (%d); delete an existing pin first", maxPinnedInvestigations)
+	}
+	if bytes+int64(len(raw)) > maxPinnedBytes {
+		return Investigation{}, fmt.Errorf("pinned investigation storage limit reached (%d MiB); delete an existing pin first", maxPinnedBytes>>20)
+	}
+	if _, err = tx.Exec("INSERT INTO investigations VALUES(?,?,?,?,?,?)", value.ID, value.Name, value.Notes, value.Created, []byte(value.View), raw); err != nil {
+		return Investigation{}, err
+	}
+	if err = tx.Commit(); err != nil {
+		return Investigation{}, err
+	}
+	return value, nil
 }
 
 func (s *Store) Investigations() ([]Investigation, error) {

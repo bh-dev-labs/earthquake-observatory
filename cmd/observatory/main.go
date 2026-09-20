@@ -182,6 +182,9 @@ func main() {
 		w.Header().Set("X-Request-ID", fmt.Sprint(id))
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("Referrer-Policy", "no-referrer")
+		w.Header().Set("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=(), usb=()")
+		w.Header().Set("Cross-Origin-Opener-Policy", "same-origin")
+		w.Header().Set("Cross-Origin-Resource-Policy", "same-origin")
 		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'")
 		host, _, _ := net.SplitHostPort(r.Host)
 		if host != "127.0.0.1" && host != "localhost" && host != "::1" {

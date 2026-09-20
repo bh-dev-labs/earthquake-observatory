@@ -3,7 +3,7 @@
 The refreshed 0.1.0 ZIPs include the country-name and custom-transect controls below. See README for source build commands.
 
 1. Extract the archive. Open the macOS app or Windows executable. The default browser opens the observatory.
-2. Choose **Past 24 hours**. Select a **Current area of activity**. Notice the visible region boundary and filtered count.
+2. Choose **Past 7 days** (the default). Select a **Current area of activity**. Notice the visible region boundary and filtered count.
 3. Tap a globe marker. Read magnitude, depth and source time. Try the 2D map and event list; selection is shared.
 4. Clear the region. Turn **Auto-rotate** on, then select an event. Rotation pauses; **Resume rotation** restarts it deliberately.
 5. Choose **Learn → How can an earthquake be deep inside Earth?**. Select section events and compare source depth with epicentre markers. Return to your exploration.

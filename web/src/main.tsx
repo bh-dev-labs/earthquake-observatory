@@ -187,7 +187,7 @@ function App() {
     fetch("/api/config")
       .then((r) => r.json())
       .then((c) => {
-        if (isCurrent(initial)) return load(c.demo ? "demo" : "day");
+        if (isCurrent(initial)) return load(c.demo ? "demo" : "week");
       })
       .catch(() => {
         if (isCurrent(initial)) return load("demo");

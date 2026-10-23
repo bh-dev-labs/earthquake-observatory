@@ -202,7 +202,7 @@ func (s *Store) DeleteCache(id string) error {
 			_, err = tx.Exec("DELETE FROM datasets WHERE id=?", id)
 		}
 		if err == nil {
-			_, err = tx.Exec("DELETE FROM events WHERE id NOT IN (SELECT event FROM members)")
+			_, err = tx.Exec("DELETE FROM events WHERE NOT EXISTS (SELECT 1 FROM members WHERE members.event=events.id)")
 		}
 	}
 	if err != nil {

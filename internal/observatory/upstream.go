@@ -1,6 +1,7 @@
 package observatory
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -81,7 +82,7 @@ func (s *Service) Fetch(ctx context.Context, u string) ([]byte, error) {
 		req.Header.Set("User-Agent", "EarthquakeObservatory/0.1 (local educational application)")
 		res, err := s.Client.Do(req)
 		if err == nil {
-			b, readErr := io.ReadAll(io.LimitReader(res.Body, 32<<20+1))
+			b, readErr := readBody(res)
 			res.Body.Close()
 			if res.StatusCode == 304 && hasCached {
 				cached.fetched = time.Now()
@@ -135,6 +136,19 @@ func (s *Service) Fetch(ctx context.Context, u string) ([]byte, error) {
 		}
 	}
 	return nil, last
+}
+
+// readBody reads at most 32 MiB plus one byte (so overflow is detectable),
+// pre-sizing from Content-Length to avoid io.ReadAll's doubling copies on the
+// multi-megabyte feeds.
+func readBody(res *http.Response) ([]byte, error) {
+	const limit = 32<<20 + 1
+	var buf bytes.Buffer
+	if res.ContentLength > 0 && res.ContentLength <= limit {
+		buf.Grow(int(res.ContentLength))
+	}
+	_, err := buf.ReadFrom(io.LimitReader(res.Body, limit))
+	return buf.Bytes(), err
 }
 
 // USGS publishes each summary period at five magnitude thresholds. "all" is

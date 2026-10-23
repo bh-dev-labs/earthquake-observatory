@@ -42,12 +42,28 @@ type Feature struct {
 type Collection struct {
 	Type     string    `json:"type"`
 	Features []Feature `json:"features"`
+	// Raw holds each feature's original bytes, parallel to Features, so a
+	// save can store them without a second encoding pass.
+	Raw []json.RawMessage `json:"-"`
 }
 
 func Parse(raw []byte) (Collection, error) {
 	var c Collection
-	if err := json.Unmarshal(raw, &c); err != nil {
+	var outer struct {
+		Type     string            `json:"type"`
+		Features []json.RawMessage `json:"features"`
+	}
+	if err := json.Unmarshal(raw, &outer); err != nil {
 		return c, err
+	}
+	c.Type, c.Raw = outer.Type, outer.Features
+	if outer.Features != nil {
+		c.Features = make([]Feature, len(outer.Features))
+		for i, f := range outer.Features {
+			if err := json.Unmarshal(f, &c.Features[i]); err != nil {
+				return c, err
+			}
+		}
 	}
 	if c.Type != "FeatureCollection" || c.Features == nil {
 		return c, fmt.Errorf("expected GeoJSON FeatureCollection")

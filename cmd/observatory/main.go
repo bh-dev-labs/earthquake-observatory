@@ -47,6 +47,10 @@ func reply(w http.ResponseWriter, v any, err error) {
 		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
 		return
 	}
+	if d, ok := v.(observatory.Dataset); ok {
+		d.WriteJSON(w)
+		return
+	}
 	json.NewEncoder(w).Encode(v)
 }
 
@@ -146,13 +150,20 @@ func main() {
 		d, e := svc.Recent(r.Context(), q.Get("period"), q.Get("level"))
 		reply(w, d, e)
 	})
+	const demoQuery = "Bundled USGS historical snapshot: 2023-02-06 to 2023-02-13 UTC; M4+; retrieved 2026-09-06 UTC"
 	mux.HandleFunc("GET /api/demo", func(w http.ResponseWriter, r *http.Request) {
+		// The bundle never changes, so one save per database is enough; a
+		// repeat visit must not pay for 600 upserts or evict a cached feed.
+		if d, e := store.Latest(demoQuery); e == nil {
+			reply(w, d, nil)
+			return
+		}
 		b, e := fs.ReadFile(static, "data/demo.geojson")
 		if e != nil {
 			reply(w, nil, e)
 			return
 		}
-		d, e := store.Save("Bundled USGS historical snapshot: 2023-02-06 to 2023-02-13 UTC; M4+; retrieved 2026-09-06 UTC", b)
+		d, e := store.Save(demoQuery, b)
 		reply(w, d, e)
 	})
 	// Syntactic parsing only; semantic limits are the service's to enforce.

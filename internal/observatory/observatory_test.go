@@ -1,6 +1,7 @@
 package observatory
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -8,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -468,5 +470,53 @@ func TestTrackedHistoryCancellation(t *testing.T) {
 	store.DB.QueryRow("SELECT count(*) FROM datasets").Scan(&count)
 	if count != 0 {
 		t.Fatal("cancelled data published")
+	}
+}
+
+func TestWriteJSONMatchesEncoder(t *testing.T) {
+	for _, d := range []Dataset{
+		{ID: "a", Query: "q", Fetched: "f", Complete: true, Data: json.RawMessage(`{"type":"FeatureCollection","features":[]}`)},
+		{ID: "b", Query: "with \"quotes\" and \u003c", Stale: true, Error: "USGS returned HTTP 503", Data: json.RawMessage(`{"k":[1,2,{"n":null}]}`)},
+		{ID: "c"},
+	} {
+		var direct bytes.Buffer
+		if err := d.WriteJSON(&direct); err != nil {
+			t.Fatal(err)
+		}
+		var encoded bytes.Buffer
+		json.NewEncoder(&encoded).Encode(d)
+		var want, got any
+		if err := json.Unmarshal(encoded.Bytes(), &want); err != nil {
+			t.Fatal(err)
+		}
+		if err := json.Unmarshal(direct.Bytes(), &got); err != nil {
+			t.Fatalf("%s: invalid JSON %q: %v", d.ID, direct.String(), err)
+		}
+		if !reflect.DeepEqual(want, got) {
+			t.Fatalf("%s: direct %s != encoder %s", d.ID, direct.String(), encoded.String())
+		}
+	}
+}
+
+func TestParseKeepsRawFeatureBytes(t *testing.T) {
+	raw := []byte(`{"type":"FeatureCollection","features":[{"type":"Feature","id":"x1","properties":{"mag":1,"time":1,"updated":1,"extra":{"nested":true}},"geometry":{"type":"Point","coordinates":[1,2,3]}}]}`)
+	c, err := Parse(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(c.Raw) != 1 || !bytes.Contains(c.Raw[0], []byte(`"extra":{"nested":true}`)) {
+		t.Fatalf("raw bytes not kept: %s", c.Raw)
+	}
+	s, _ := Open(filepath.Join(t.TempDir(), "db"))
+	defer s.DB.Close()
+	if _, err := s.Save("q", raw); err != nil {
+		t.Fatal(err)
+	}
+	var payload []byte
+	if err := s.DB.QueryRow(`SELECT payload FROM events WHERE id='x1'`).Scan(&payload); err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(payload, c.Raw[0]) {
+		t.Fatalf("stored payload re-encoded: %s", payload)
 	}
 }

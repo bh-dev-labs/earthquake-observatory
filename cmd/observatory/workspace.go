@@ -22,6 +22,10 @@ func workspaceReply(writer http.ResponseWriter, value any, err error) {
 		json.NewEncoder(writer).Encode(map[string]string{"error": err.Error()})
 		return
 	}
+	if dataset, ok := value.(observatory.Dataset); ok {
+		dataset.WriteJSON(writer)
+		return
+	}
 	json.NewEncoder(writer).Encode(value)
 }
 

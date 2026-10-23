@@ -103,7 +103,9 @@ function App() {
     detailHeading = useRef<HTMLHeadingElement>(null),
     selectionOrigin = useRef<HTMLElement | null>(null),
     initialized = useRef(false),
-    loadRef = useRef<(mode: Mode, query?: Query) => Promise<Dataset | null>>();
+    loadRef = useRef<
+      ((mode: Mode, query?: Query) => Promise<Dataset | null>) | null
+    >(null);
   const {
     dataset,
     query,

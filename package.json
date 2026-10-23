@@ -13,18 +13,18 @@
   },
   "dependencies": {
     "d3-geo": "3.1.1",
-    "preact": "10.29.8",
+    "preact": "11.0.2",
     "topojson-client": "3.1.0"
   },
   "devDependencies": {
-    "@axe-core/playwright": "4.13.0",
-    "@playwright/test": "1.63.0",
+    "@axe-core/playwright": "4.14.0",
+    "@playwright/test": "1.64.1",
     "@types/d3-geo": "3.1.1",
-    "@types/node": "26.4.1",
+    "@types/node": "26.6.5",
     "@types/topojson-client": "3.1.5",
-    "prettier": "3.9.6",
-    "tsx": "4.23.13",
+    "prettier": "3.9.10",
+    "tsx": "4.23.15",
     "typescript": "7.0.2",
-    "vite": "8.2.2"
+    "vite": "8.3.5"
   }
 }

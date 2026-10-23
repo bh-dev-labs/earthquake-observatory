@@ -40,8 +40,10 @@ import {
   defaults,
   distance,
   download,
+  extent,
   filterEvents,
   regions,
+  utc,
   type Dataset,
   type Event,
   type Filters,
@@ -49,8 +51,6 @@ import {
 } from "./model";
 import "./style.css";
 type SortKey = "mag" | "place" | "depth" | "time" | "status";
-const utc = (t: number) =>
-  new Date(t).toISOString().replace("T", " ").replace(".000Z", " UTC");
 const storedAuto = () => {
   try {
     return (
@@ -238,6 +238,10 @@ function App() {
       );
     return result;
   }, [all, filters, cursor, near, selected, nearRadius, nearHours]);
+  const filteredIds = useMemo(
+    () => new Set(filtered.map((e) => e.id)),
+    [filtered],
+  );
   useEffect(
     () => setPage((previous) => clampPage(previous, filtered.length)),
     [filtered.length],
@@ -286,9 +290,11 @@ function App() {
       selected.properties.mmi != null);
   const custom =
     !!filters.region && !regions.some((r) => r.name === filters.region!.name);
-  const times = useMemo(() => all.map((e) => e.properties.time), [all]),
-    lo = times.length ? Math.min(...times) : 0,
-    hi = times.length ? Math.max(...times) : 1;
+  const [times, lo, hi] = useMemo(() => {
+    const times = all.map((e) => e.properties.time);
+    const [lo, hi] = extent(times);
+    return [times, times.length ? lo : 0, times.length ? hi : 1] as const;
+  }, [all]);
   useEffect(() => {
     if (!playing) return;
     let frame = 0,
@@ -671,14 +677,21 @@ function App() {
     setLesson(-1);
     setLearn(false);
   }
+  // One formatter per zone: constructing Intl.DateTimeFormat per row costs
+  // twenty times more than formatting with it.
+  const zoneFormatter = useMemo(
+    () =>
+      zone === "UTC"
+        ? null
+        : new Intl.DateTimeFormat(undefined, {
+            dateStyle: "medium",
+            timeStyle: "long",
+            timeZone: zone,
+          }),
+    [zone],
+  );
   const displayTime = (t: number) =>
-    zone === "UTC"
-      ? utc(t)
-      : new Intl.DateTimeFormat(undefined, {
-          dateStyle: "medium",
-          timeStyle: "long",
-          timeZone: zone,
-        }).format(t);
+    zoneFormatter ? zoneFormatter.format(t) : utc(t);
   const products = useMemo(() => detail?.properties?.products || {}, [detail]);
   return (
     <>
@@ -1009,7 +1022,7 @@ function App() {
             {selected ? (
               <SelectedEvent
                 selected={selected}
-                inView={filtered.some((e) => e.id === selected.id)}
+                inView={filteredIds.has(selected.id)}
                 zone={zone}
                 displayTime={stableDisplayTime}
                 closeSelection={stableClose}

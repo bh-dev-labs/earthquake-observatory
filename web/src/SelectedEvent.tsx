@@ -1,6 +1,6 @@
 import { memo } from "preact/compat";
 import type { Ref } from "preact";
-import { zoneLabel, type Event } from "./model";
+import { utc, zoneLabel, type Event } from "./model";
 import type { Detail } from "./data";
 import { uncertainty } from "./science";
 
@@ -32,8 +32,6 @@ type Props = {
 
 const fmt = (v: number | null | undefined, digits = 1) =>
   v == null ? "Unavailable" : v.toFixed(digits);
-const utc = (t: number) =>
-  new Date(t).toISOString().replace("T", " ").replace(".000Z", " UTC");
 const safeURL = (s: string) => {
   try {
     const u = new URL(s);

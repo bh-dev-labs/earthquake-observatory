@@ -26,6 +26,17 @@ import {
   type Region,
 } from "./model";
 export type Camera = { lon: number; lat: number; zoom: number };
+// Built once; drawing rebuilt these on every animation frame.
+const GRATICULE = geoGraticule10();
+const PLATE_LABELS: [string, [number, number]][] = [
+  ["Pacific", [190, 0]],
+  ["North American", [-100, 45]],
+  ["Eurasian", [65, 45]],
+  ["African", [20, 0]],
+  ["Antarctic", [20, -70]],
+  ["Indo-Australian", [100, -25]],
+  ["South American", [-55, -20]],
+];
 type Props = {
   events: Event[];
   selected: string;
@@ -185,7 +196,7 @@ export function Globe(p: Props) {
       ctx.fill();
     }
     ctx.beginPath();
-    path(geoGraticule10());
+    path(GRATICULE);
     ctx.strokeStyle = token("--globe-graticule");
     ctx.lineWidth = 0.55;
     ctx.stroke();
@@ -197,15 +208,7 @@ export function Globe(p: Props) {
       ctx.stroke();
       ctx.font = "11px sans-serif";
       ctx.fillStyle = token("--plate-label");
-      for (const [name, coord] of [
-        ["Pacific", [190, 0]],
-        ["North American", [-100, 45]],
-        ["Eurasian", [65, 45]],
-        ["African", [20, 0]],
-        ["Antarctic", [20, -70]],
-        ["Indo-Australian", [100, -25]],
-        ["South American", [-55, -20]],
-      ] as [string, [number, number]][]) {
+      for (const [name, coord] of PLATE_LABELS) {
         if (p.flat || visible(coord, [p.camera.lon, p.camera.lat])) {
           const xy = proj(coord);
           if (xy) ctx.fillText(name, xy[0] - 20, xy[1]);
@@ -325,18 +328,16 @@ export function Globe(p: Props) {
       ctx.restore();
     }
     hits.current = [];
-    const ordered = [
-      ...p.events.filter((e) => e.id !== p.selected),
-      ...p.events.filter((e) => e.id === p.selected),
-    ];
-    for (const e of ordered) {
+    // The selected marker draws last so it sits on top; one pass, no copies.
+    let selectedEvent: Event | undefined;
+    const draw = (e: Event) => {
       const [lon, lat, depth] = e.geometry.coordinates;
-      if (!p.flat && !visible([lon, lat], [p.camera.lon, p.camera.lat]))
-        continue;
+      // The orthographic projection clips at 90°, so proj() already returns
+      // null for the far hemisphere; a per-event great-circle test is redundant.
       const xy = proj([lon, lat]);
-      if (!xy) continue;
+      if (!xy) return;
       const [x, y] = xy;
-      if (x < 0 || x > w || y < 0 || y > h) continue;
+      if (x < 0 || x > w || y < 0 || y > h) return;
       const r = radius(e.properties.mag);
       ctx.beginPath();
       ctx.arc(x, y, r, 0, Math.PI * 2);
@@ -364,7 +365,12 @@ export function Globe(p: Props) {
         ctx.setLineDash([]);
       }
       hits.current.push({ e, x, y, r });
+    };
+    for (const e of p.events) {
+      if (e.id === p.selected) selectedEvent = e;
+      else draw(e);
     }
+    if (selectedEvent) draw(selectedEvent);
   }, [
     earth,
     countries,

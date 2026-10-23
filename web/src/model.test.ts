@@ -2,6 +2,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { geoOrthographic } from "d3-geo";
 import {
+  extent,
+  utc,
   within,
   visible,
   transect,
@@ -107,4 +109,17 @@ test("UTC epoch conversion independent of DST zone", () => {
     b = Date.parse("2024-03-10T03:00:00-04:00");
   assert.equal(b - a, 1000);
   assert.equal(new Date(a + 123).toISOString(), "2024-03-10T06:59:59.123Z");
+});
+
+test("extent finds bounds in one pass and survives spread-breaking sizes", () => {
+  assert.deepEqual(extent([3, -2, 7, 7, 0]), [-2, 7]);
+  assert.deepEqual(extent([5]), [5, 5]);
+  assert.deepEqual(extent([]), [Infinity, -Infinity]);
+  const big = Array.from({ length: 200000 }, (_, i) => (i * 7919) % 100003);
+  assert.deepEqual(extent(big), [Math.min(...big.slice(0, 1)), 100002]);
+  assert.throws(() => Math.max(...big), RangeError);
+});
+
+test("utc renders a millisecond timestamp as a UTC label", () => {
+  assert.equal(utc(Date.UTC(2023, 1, 6, 1, 17, 34)), "2023-02-06 01:17:34 UTC");
 });

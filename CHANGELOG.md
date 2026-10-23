@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- Updated every dependency: Go 1.27.3 with modernc.org/sqlite 1.61.0; Preact 11, Vite 8.3, Playwright 1.64, TypeScript tooling; GitHub Actions checkout v7, setup-go v7 and setup-node v7.1 pinned by commit, CI on Node 26.
+- Hardened the local API: GET routes with side effects now reject requests from pages on other localhost ports (browsers treat every localhost port as one site), validation errors return HTTP 400 instead of 502, the data directory is forced to 0700 and backups to 0600, the server has read/write timeouts and a header cap, hashed assets are served immutable, and the release script uses the user's own Go caches and runs `go mod verify`.
+- Faster saves and responses: stored event payloads are the original USGS bytes (no second JSON encoding, a third of the memory), orphaned events are swept only when a dataset is evicted, and dataset responses stream their validated payload instead of re-encoding it. The demo bundle is served from the cache after its first save.
+- Lighter rendering: chart series and the depth transect are memoised (the transect is skipped while hidden), time-zone offsets are computed once rather than on every table render, the globe no longer rebuilds the graticule or copies the event list each frame, and extents use a single pass instead of argument spreading, which threw on very large snapshots.
+- Added `.claude/agents/critic.md` and `.claude/agents/test-agent.md`, project-specific review and test-writing agents for Claude Code.
+
 ## 0.2.1 (local release candidate)
 
 - Restored the on-screen author credit — "A Bruce Hoppe Project" — to the footer and About panel, and to README, without a repository link. The copyright remains recorded as a source comment and in LICENSE, which ships in every archive; the About panel keeps the statement that the project is independent of the USGS.

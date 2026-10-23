@@ -209,6 +209,22 @@ export function transect(
       Math.abs(cross) <= width / 2 && along >= 0 && along <= distance(a, b),
   };
 }
+// Smallest and largest value in one pass. Math.min(...values) passes one
+// argument per element and throws RangeError near 100k entries, within the
+// 50,000-event snapshots the app accepts.
+export function extent(values: number[]): [number, number] {
+  let lo = Infinity,
+    hi = -Infinity;
+  for (const v of values) {
+    if (v < lo) lo = v;
+    if (v > hi) hi = v;
+  }
+  return [lo, hi];
+}
+
+export const utc = (t: number) =>
+  new Date(t).toISOString().replace("T", " ").replace(".000Z", " UTC");
+
 export function csvCell(v: unknown) {
   if (v === null || v === undefined) return "";
   let s = String(v);

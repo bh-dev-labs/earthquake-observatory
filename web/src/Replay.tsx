@@ -1,4 +1,5 @@
 import { memo } from "preact/compat";
+import { utc } from "./model";
 
 type Props = {
   mode: string;
@@ -14,9 +15,6 @@ type Props = {
   replaySpeed: number;
   setReplaySpeed: (v: number) => void;
 };
-
-const utc = (t: number) =>
-  new Date(t).toISOString().replace("T", " ").replace(".000Z", " UTC");
 
 function ReplayView({
   mode,

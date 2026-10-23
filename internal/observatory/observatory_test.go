@@ -3,6 +3,7 @@ package observatory
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -117,11 +118,17 @@ func TestStaleRecoveryAndValidation(t *testing.T) {
 	if _, e = svc.Fetch(context.Background(), "http://localhost/secret"); e == nil {
 		t.Fatal("proxy accepted")
 	}
-	if _, e = svc.Recent(context.Background(), "evil", ""); e == nil {
-		t.Fatal("invalid period")
+	if _, e = svc.Recent(context.Background(), "evil", ""); !errors.Is(e, ErrInvalid) {
+		t.Fatal("invalid period not ErrInvalid:", e)
 	}
-	if _, e = svc.Recent(context.Background(), "day", "../../secret"); e == nil {
-		t.Fatal("invalid level")
+	if _, e = svc.Recent(context.Background(), "day", "../../secret"); !errors.Is(e, ErrInvalid) {
+		t.Fatal("invalid level not ErrInvalid:", e)
+	}
+	if _, e = svc.Count(context.Background(), time.Now(), time.Now().Add(-time.Hour), 4); !errors.Is(e, ErrInvalid) {
+		t.Fatal("reversed interval not ErrInvalid:", e)
+	}
+	if stale.Error == "" || errors.Is(errors.New(stale.Error), ErrInvalid) {
+		t.Fatal("upstream failure must not be classified as invalid")
 	}
 }
 func TestThresholdFeedAndCount(t *testing.T) {

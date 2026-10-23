@@ -5,6 +5,7 @@ import (
 	"earthquake-observatory/internal/observatory"
 	"embed"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io/fs"
@@ -30,10 +31,61 @@ var assets embed.FS
 // script overrides it with -ldflags "-X main.version=$version".
 var version = "dev"
 
+var requests atomic.Uint64
+
+// reply writes a JSON body. Validation failures are the caller's mistake
+// (400); anything else means USGS or storage failed (502).
+func reply(w http.ResponseWriter, v any, err error) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-store")
+	if err != nil {
+		status := http.StatusBadGateway
+		if errors.Is(err, observatory.ErrInvalid) {
+			status = http.StatusBadRequest
+		}
+		w.WriteHeader(status)
+		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+		return
+	}
+	json.NewEncoder(w).Encode(v)
+}
+
+// secure wraps every route with the loopback-only policy and response
+// headers. It is the single place the browser-facing security posture lives.
+func secure(next http.Handler, requests *atomic.Uint64) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		id := requests.Add(1)
+		w.Header().Set("X-Request-ID", fmt.Sprint(id))
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("Referrer-Policy", "no-referrer")
+		w.Header().Set("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=(), usb=()")
+		w.Header().Set("Cross-Origin-Opener-Policy", "same-origin")
+		w.Header().Set("Cross-Origin-Resource-Policy", "same-origin")
+		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'")
+		if strings.HasPrefix(r.URL.Path, "/assets/") {
+			// Vite names bundles by content hash, so a changed file is a new URL.
+			w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+		}
+		host, _, _ := net.SplitHostPort(r.Host)
+		if host != "127.0.0.1" && host != "localhost" && host != "::1" {
+			http.Error(w, "loopback host required", 403)
+			return
+		}
+		// Browsers treat every localhost port as the same site, so a page on
+		// another local port could still trigger GET routes that write the
+		// cache or fan out to USGS. Only same-origin pages, direct navigation
+		// and non-browser clients (no Sec-Fetch-Site header) reach the API.
+		if site := r.Header.Get("Sec-Fetch-Site"); site == "cross-site" || (strings.HasPrefix(r.URL.Path, "/api/") && site != "" && site != "same-origin" && site != "none") {
+			http.Error(w, "cross-site request denied", 403)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
-	var requests atomic.Uint64
 	addr := flag.String("addr", "127.0.0.1:8787", "loopback listen address")
 	data := flag.String("data-dir", "", "SQLite directory")
 	demo := flag.Bool("demo", false, "start with bundled historical data")
@@ -51,6 +103,11 @@ func main() {
 	if err := os.MkdirAll(*data, 0700); err != nil {
 		panic(err)
 	}
+	// MkdirAll leaves an existing directory's mode alone; investigation notes
+	// and cached catalogs must not be readable by other local accounts.
+	if err := os.Chmod(*data, 0700); err != nil {
+		panic(err)
+	}
 	store, err := observatory.Open(filepath.Join(*data, "observatory.db"))
 	if err != nil {
 		panic(err)
@@ -58,6 +115,9 @@ func main() {
 	defer store.DB.Close()
 	if *backup != "" {
 		if err := store.Backup(*backup); err != nil {
+			panic(err)
+		}
+		if err := os.Chmod(*backup, 0600); err != nil {
 			panic(err)
 		}
 		fmt.Println("Backup written:", *backup)
@@ -74,16 +134,6 @@ func main() {
 	static, _ := fs.Sub(assets, "dist")
 	mux := http.NewServeMux()
 	registerWorkspaceRoutes(mux, svc, store)
-	reply := func(w http.ResponseWriter, v any, err error) {
-		w.Header().Set("Content-Type", "application/json")
-		w.Header().Set("Cache-Control", "no-store")
-		if err != nil {
-			w.WriteHeader(502)
-			json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
-			return
-		}
-		json.NewEncoder(w).Encode(v)
-	}
 	mux.HandleFunc("GET /api/health", func(w http.ResponseWriter, r *http.Request) {
 		reply(w, map[string]string{"status": "ok", "version": version}, nil)
 	})
@@ -177,26 +227,7 @@ func main() {
 		go func() { time.Sleep(100 * time.Millisecond); stop() }()
 	})
 	mux.Handle("GET /", http.FileServerFS(static))
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		id := requests.Add(1)
-		w.Header().Set("X-Request-ID", fmt.Sprint(id))
-		w.Header().Set("X-Content-Type-Options", "nosniff")
-		w.Header().Set("Referrer-Policy", "no-referrer")
-		w.Header().Set("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=(), usb=()")
-		w.Header().Set("Cross-Origin-Opener-Policy", "same-origin")
-		w.Header().Set("Cross-Origin-Resource-Policy", "same-origin")
-		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'")
-		host, _, _ := net.SplitHostPort(r.Host)
-		if host != "127.0.0.1" && host != "localhost" && host != "::1" {
-			http.Error(w, "loopback host required", 403)
-			return
-		}
-		if r.Header.Get("Sec-Fetch-Site") == "cross-site" {
-			http.Error(w, "cross-site request denied", 403)
-			return
-		}
-		mux.ServeHTTP(w, r)
-	})
+	handler := secure(mux, &requests)
 	if !strings.HasPrefix(*addr, "127.0.0.1:") && !strings.HasPrefix(*addr, "localhost:") && !strings.HasPrefix(*addr, "[::1]:") {
 		panic("only loopback addresses are supported")
 	}
@@ -205,7 +236,10 @@ func main() {
 		fmt.Fprintln(os.Stderr, "Cannot start:", err, "\nAn existing observatory may be running. Open http://"+*addr+" or choose -addr 127.0.0.1:8788")
 		os.Exit(1)
 	}
-	server := &http.Server{Handler: handler, ReadHeaderTimeout: 5 * time.Second, IdleTimeout: 60 * time.Second}
+	// History requests may legitimately stream for two minutes; the write
+	// timeout stays above that so the deadline inside the handler is the one
+	// that fires. Investigation bodies are capped at 42 MiB by the handler.
+	server := &http.Server{Handler: handler, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 2 * time.Minute, WriteTimeout: 3 * time.Minute, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 64 << 10}
 	go func() {
 		<-ctx.Done()
 		c, cancel := context.WithTimeout(context.Background(), 5*time.Second)

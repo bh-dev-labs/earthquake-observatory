@@ -3,6 +3,7 @@ package observatory
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -14,6 +15,10 @@ import (
 	"sync"
 	"time"
 )
+
+// ErrInvalid marks a request the caller formed badly, as opposed to an
+// upstream or storage failure; handlers map it to HTTP 400 rather than 502.
+var ErrInvalid = errors.New("invalid request")
 
 type responseCache struct {
 	body           []byte
@@ -144,13 +149,13 @@ func ValidLevel(level string) bool {
 }
 func (s *Service) Recent(ctx context.Context, period, level string) (Dataset, error) {
 	if period != "hour" && period != "day" && period != "week" && period != "month" {
-		return Dataset{}, fmt.Errorf("period must be hour, day, week or month")
+		return Dataset{}, fmt.Errorf("%w: period must be hour, day, week or month", ErrInvalid)
 	}
 	if level == "" {
 		level = "all"
 	}
 	if !ValidLevel(level) {
-		return Dataset{}, fmt.Errorf("level must be all, 1.0, 2.5, 4.5 or significant")
+		return Dataset{}, fmt.Errorf("%w: level must be all, 1.0, 2.5, 4.5 or significant", ErrInvalid)
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -180,7 +185,7 @@ func (s *Service) Recent(ctx context.Context, period, level string) (Dataset, er
 // interval the retrieval would accept.
 func checkInterval(start, end time.Time, min float64) error {
 	if end.Sub(start) < time.Millisecond || start.Nanosecond()%int(time.Millisecond) != 0 || end.Nanosecond()%int(time.Millisecond) != 0 || end.Sub(start) > 31*24*time.Hour || end.After(time.Now().Add(time.Minute)) || min < -2 || min > 10 || math.IsNaN(min) || math.IsInf(min, 0) {
-		return fmt.Errorf("use a past UTC interval of 1 millisecond to 31 days and magnitude -2 to 10")
+		return fmt.Errorf("%w: use a past UTC interval of 1 millisecond to 31 days and magnitude -2 to 10", ErrInvalid)
 	}
 	return nil
 }

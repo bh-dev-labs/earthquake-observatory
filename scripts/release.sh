@@ -1,8 +1,11 @@
 #!/bin/sh
 set -eu
 cd "$(dirname "$0")/.."
-export GOCACHE="${GOCACHE:-/private/tmp/atlas-go-cache}"
-export GOPATH="${GOPATH:-/private/tmp/atlas-go}"
+# Go caches stay in the current user's own directories; a shared /tmp path
+# could be pre-seeded by another local account before the first build.
+export GOCACHE="${GOCACHE:-$(go env GOCACHE)}"
+export GOPATH="${GOPATH:-$(go env GOPATH)}"
+go mod verify
 npm ci
 npm run build
 npm test

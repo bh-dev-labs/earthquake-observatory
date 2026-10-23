@@ -66,10 +66,6 @@ func secure(next http.Handler, requests *atomic.Uint64) http.Handler {
 		w.Header().Set("Cross-Origin-Opener-Policy", "same-origin")
 		w.Header().Set("Cross-Origin-Resource-Policy", "same-origin")
 		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'")
-		if strings.HasPrefix(r.URL.Path, "/assets/") {
-			// Vite names bundles by content hash, so a changed file is a new URL.
-			w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
-		}
 		host, _, _ := net.SplitHostPort(r.Host)
 		if host != "127.0.0.1" && host != "localhost" && host != "::1" {
 			http.Error(w, "loopback host required", 403)
@@ -104,19 +100,29 @@ func main() {
 		}
 		*data = filepath.Join(base, "EarthquakeObservatory")
 	}
-	if err := os.MkdirAll(*data, 0700); err != nil {
-		panic(err)
+	if _, statErr := os.Stat(*data); os.IsNotExist(statErr) {
+		// A directory this program creates is private; one the user chose
+		// (perhaps their home or the repository) keeps whatever mode it has.
+		if err := os.MkdirAll(*data, 0700); err != nil {
+			panic(err)
+		}
+		if err := os.Chmod(*data, 0700); err != nil {
+			slog.Warn("Could not restrict data directory", "path", *data, "error", err)
+		}
 	}
-	// MkdirAll leaves an existing directory's mode alone; investigation notes
-	// and cached catalogs must not be readable by other local accounts.
-	if err := os.Chmod(*data, 0700); err != nil {
-		panic(err)
-	}
-	store, err := observatory.Open(filepath.Join(*data, "observatory.db"))
+	dbPath := filepath.Join(*data, "observatory.db")
+	store, err := observatory.Open(dbPath)
 	if err != nil {
 		panic(err)
 	}
 	defer store.DB.Close()
+	// Investigation notes and cached catalogs must not be readable by other
+	// local accounts even when the directory itself is shared.
+	for _, suffix := range []string{"", "-wal", "-shm"} {
+		if err := os.Chmod(dbPath+suffix, 0600); err != nil && !os.IsNotExist(err) {
+			slog.Warn("Could not restrict database file", "path", dbPath+suffix, "error", err)
+		}
+	}
 	if *backup != "" {
 		if err := store.Backup(*backup); err != nil {
 			panic(err)
@@ -172,7 +178,7 @@ func main() {
 		b, e2 := time.Parse(time.RFC3339Nano, q.Get("end"))
 		m, e3 := strconv.ParseFloat(q.Get("min"), 64)
 		if e1 != nil || e2 != nil || e3 != nil {
-			w.WriteHeader(400)
+			reply(w, nil, fmt.Errorf("%w: start and end must be RFC3339 timestamps and min a number", observatory.ErrInvalid))
 			return a, b, m, false
 		}
 		return a, b, m, true
@@ -237,7 +243,15 @@ func main() {
 		reply(w, map[string]string{"status": "stopping"}, nil)
 		go func() { time.Sleep(100 * time.Millisecond); stop() }()
 	})
-	mux.Handle("GET /", http.FileServerFS(static))
+	files := http.FileServerFS(static)
+	mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/assets/") {
+			// Vite names bundles by content hash, so a changed file is a new
+			// URL. Set after the policy checks so a 403 is never cached.
+			w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+		}
+		files.ServeHTTP(w, r)
+	})
 	handler := secure(mux, &requests)
 	if !strings.HasPrefix(*addr, "127.0.0.1:") && !strings.HasPrefix(*addr, "localhost:") && !strings.HasPrefix(*addr, "[::1]:") {
 		panic("only loopback addresses are supported")

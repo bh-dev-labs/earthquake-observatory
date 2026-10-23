@@ -332,8 +332,9 @@ export function Globe(p: Props) {
     let selectedEvent: Event | undefined;
     const draw = (e: Event) => {
       const [lon, lat, depth] = e.geometry.coordinates;
-      // The orthographic projection clips at 90°, so proj() already returns
-      // null for the far hemisphere; a per-event great-circle test is redundant.
+      // d3-geo point projection does not clip: a far-side point lands on the
+      // same pixel as its mirror image, so the hemisphere test is required.
+      if (!p.flat && !visible([lon, lat], [p.camera.lon, p.camera.lat])) return;
       const xy = proj([lon, lat]);
       if (!xy) return;
       const [x, y] = xy;

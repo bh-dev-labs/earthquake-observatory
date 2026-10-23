@@ -129,8 +129,8 @@ func TestStaleRecoveryAndValidation(t *testing.T) {
 	if _, e = svc.Count(context.Background(), time.Now(), time.Now().Add(-time.Hour), 4); !errors.Is(e, ErrInvalid) {
 		t.Fatal("reversed interval not ErrInvalid:", e)
 	}
-	if stale.Error == "" || errors.Is(errors.New(stale.Error), ErrInvalid) {
-		t.Fatal("upstream failure must not be classified as invalid")
+	if stale.Error == "" || strings.HasPrefix(stale.Error, ErrInvalid.Error()) {
+		t.Fatal("upstream failure must not be classified as invalid:", stale.Error)
 	}
 }
 func TestThresholdFeedAndCount(t *testing.T) {

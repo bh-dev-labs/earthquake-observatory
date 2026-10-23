@@ -43,7 +43,7 @@ func TestSecureRejectsOtherLocalPortsForAPI(t *testing.T) {
 	}
 }
 
-func TestSecureHeadersAndImmutableAssets(t *testing.T) {
+func TestSecureHeadersAndRejectedAssetsNotCached(t *testing.T) {
 	var counter atomic.Uint64
 	handler := secure(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}), &counter)
 	for _, path := range []string{"/", "/assets/index-abc.js"} {
@@ -54,10 +54,13 @@ func TestSecureHeadersAndImmutableAssets(t *testing.T) {
 		if h.Get("Content-Security-Policy") == "" || h.Get("X-Content-Type-Options") != "nosniff" {
 			t.Fatalf("%s missing security headers", path)
 		}
-		immutable := h.Get("Cache-Control") == "public, max-age=31536000, immutable"
-		if immutable != (path != "/") {
-			t.Fatalf("%s cache-control %q", path, h.Get("Cache-Control"))
-		}
+	}
+	request := httptest.NewRequest("GET", "http://127.0.0.1:8787/assets/index-abc.js", nil)
+	request.Header.Set("Sec-Fetch-Site", "cross-site")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != 403 || response.Header().Get("Cache-Control") != "" {
+		t.Fatalf("rejected asset must not be cacheable: %d %q", response.Code, response.Header().Get("Cache-Control"))
 	}
 }
 

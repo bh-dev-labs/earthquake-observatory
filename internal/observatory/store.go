@@ -95,7 +95,7 @@ func (s *Store) Save(query string, raw []byte) (Dataset, error) {
 	defer tx.Rollback()
 	// A 20,000-event history would otherwise re-plan the same two statements
 	// 40,000 times inside this transaction.
-	events, err := tx.Prepare(`INSERT INTO events VALUES(?,?,?) ON CONFLICT(id) DO UPDATE SET updated=excluded.updated,payload=excluded.payload WHERE excluded.updated>events.updated`)
+	events, err := tx.Prepare(`INSERT INTO events VALUES(?,?,?) ON CONFLICT(id) DO UPDATE SET updated=excluded.updated,payload=excluded.payload WHERE excluded.updated>=events.updated`)
 	if err != nil {
 		return Dataset{}, err
 	}
@@ -105,6 +105,9 @@ func (s *Store) Save(query string, raw []byte) (Dataset, error) {
 		return Dataset{}, err
 	}
 	defer members.Close()
+	if len(c.Raw) != len(c.Features) {
+		return Dataset{}, fmt.Errorf("collection raw bytes out of step with features")
+	}
 	for i, e := range c.Features {
 		if _, err = events.Exec(e.ID, e.Properties.Updated, []byte(c.Raw[i])); err != nil {
 			return Dataset{}, err
